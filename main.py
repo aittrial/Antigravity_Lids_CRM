@@ -128,9 +128,9 @@ def main():
                         course = row.get('City/Course', '')
                         comment = row.get('Comments', '')
 
-                        # Пропускаем строки, где нет ни имени, ни телефона
-                        if pd.isna(name) and pd.isna(phone):
-                            continue
+                        # # Пропускаем строки, где нет ни имени, ни телефона
+                        # if pd.isna(name) and pd.isna(phone):
+                        #     continue
 
                         # Превращаем данные в строку, заменяя NaN на пустую строку
                         add_lead(
