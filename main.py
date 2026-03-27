@@ -4,18 +4,18 @@ import os
 from database import init_db, get_leads, add_lead, update_lead, delete_lead, get_allowed_emails, add_allowed_email, delete_allowed_email
 from auth import check_password, logout
 
-# Initial Page Config
+# Настройка страницы
 st.set_page_config(page_title="Lids_CRM ANTIGRAVITY v2.1", layout="wide")
 
-# Ensure DB is initialized
+# Инициализация БД
 init_db()
 
-# Custom CSS for status colors
+# Цвета статусов
 def get_status_color(status):
     colors = {
-        "blue": "#ADD8E6", # Голубой: Лид передан
-        "yellow": "#FFFFE0", # Желтый: Перезвонить
-        "red": "#FFB6C1", # Красный: Отказ
+        "blue": "#ADD8E6", 
+        "yellow": "#FFFFE0", 
+        "red": "#FFB6C1", 
         "white": "#FFFFFF"
     }
     return colors.get(status, "#FFFFFF")
@@ -24,9 +24,9 @@ def main():
     if not check_password():
         return
 
-    # Sidebar
+    # Боковая панель
     st.sidebar.title(f"Lids_CRM v2.1")
-    st.sidebar.info(f"Вход как: {st.session_state['role']} | {st.session_state['user_email']}")
+    st.sidebar.info(f"Вход как: {st.session_state['role']}")
     
     menu = ["Лиды", "Добавить лид", "Импорт/Экспорт"]
     if st.session_state["role"] == "superadmin":
@@ -37,10 +37,9 @@ def main():
     if st.sidebar.button("Выйти"):
         logout()
 
-    # --- ЛИДЫ ---
+    # --- РАЗДЕЛ: ЛИДЫ ---
     if choice == "Лиды":
         st.subheader("📋 Список лидов")
-        
         leads = get_leads()
         if not leads:
             st.info("Лидов пока нет.")
@@ -54,126 +53,116 @@ def main():
                     bg_color = get_status_color(row['status_color'])
                     st.markdown(f'<div style="background-color:{bg_color}; padding:10px; border-radius:5px;">', unsafe_allow_html=True)
                     
-                    col1, col2, col3 = st.columns(3)
-                    new_name = col1.text_input("Имя", row['full_name'], key=f"name_{row['id']}")
-                    new_phone = col2.text_input("Телефон", row['phone'], key=f"phone_{row['id']}")
-                    new_email = col3.text_input("Email", row['email'], key=f"email_{row['id']}")
+                    c1, c2, c3 = st.columns(3)
+                    new_name = c1.text_input("Имя", row['full_name'], key=f"n_{row['id']}")
+                    new_phone = c2.text_input("Телефон", row['phone'], key=f"p_{row['id']}")
+                    new_email = c3.text_input("Email", row['email'], key=f"e_{row['id']}")
                     
-                    col4, col5, col6 = st.columns(3)
-                    new_course = col4.text_input("Курс", row['course_name'], key=f"course_{row['id']}")
-                    new_status = col5.selectbox("Статус (цвет)", ["white", "blue", "yellow", "red"], 
+                    c4, c5, c6 = st.columns(3)
+                    new_course = c4.text_input("Курс", row['course_name'], key=f"c_{row['id']}")
+                    new_status = c5.selectbox("Статус", ["white", "blue", "yellow", "red"], 
                                               index=["white", "blue", "yellow", "red"].index(row['status_color']),
-                                              key=f"status_{row['id']}")
-                    new_source = col6.text_input("Источник", row['source'], key=f"source_{row['id']}")
+                                              key=f"s_{row['id']}")
+                    new_source = c6.text_input("Источник", row['source'], key=f"src_{row['id']}")
                     
-                    new_comment = st.text_area("Комментарий", row['comment'], key=f"comm_{row['id']}")
+                    new_comment = st.text_area("Комментарий", row['comment'], key=f"cm_{row['id']}")
                     
-                    if st.button("Сохранить изменения", key=f"save_{row['id']}"):
+                    if st.button("Сохранить", key=f"sv_{row['id']}"):
                         update_lead(row['id'], full_name=new_name, phone=new_phone, email=new_email, 
                                     course_name=new_course, status_color=new_status, comment=new_comment, source=new_source)
                         st.success("Обновлено!")
                         st.rerun()
                     
                     if st.session_state["role"] == "superadmin":
-                        if st.button("❌ Удалить лид", key=f"del_{row['id']}"):
+                        if st.button("❌ Удалить", key=f"dl_{row['id']}"):
                             delete_lead(row['id'])
                             st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- ДОБАВИТЬ ЛИД ---
+    # --- РАЗДЕЛ: ДОБАВИТЬ ЛИД ---
     elif choice == "Добавить лид":
-        st.subheader("➕ Добавить нового лида")
-        with st.form("add_form"):
-            f_name = st.text_input("ФИО")
-            f_phone = st.text_input("Телефон")
-            f_email = st.text_input("Email")
-            f_course = st.text_input("Курс")
-            f_source = st.text_input("Источник", value="Manual")
-            f_comment = st.text_area("Комментарий")
-            
-            submitted = st.form_submit_button("Добавить")
-            if submitted:
-                if f_name or f_phone:
-                    add_lead(f_name, f_phone, f_email, f_course, f_source, comment=f_comment)
+        st.subheader("➕ Новый лид")
+        with st.form("add_f"):
+            f_n = st.text_input("ФИО")
+            f_p = st.text_input("Телефон")
+            f_e = st.text_input("Email")
+            f_c = st.text_input("Курс")
+            f_s = st.text_input("Источник", value="Manual")
+            f_comm = st.text_area("Комментарий")
+            if st.form_submit_button("Добавить"):
+                if f_n or f_p:
+                    add_lead(f_n, f_p, f_e, f_c, f_s, comment=f_comm)
                     st.success("Лид добавлен!")
                 else:
-                    st.error("Имя или телефон обязательны")
+                    st.error("Нужно имя или телефон")
 
-    # --- ИМПОРТ / ЭКСПОРТ ---
+    # --- РАЗДЕЛ: ИМПОРТ (ФИНАЛЬНАЯ ВЕРСИЯ) ---
     elif choice == "Импорт/Экспорт":
-        st.subheader("📂 Импорт лидов из Excel")
-        uploaded_file = st.file_uploader("Выберите Excel файл", type=["xlsx", "xls", "csv"])
+        st.subheader("📂 Импорт из Excel")
+        up_file = st.file_uploader("Выберите файл", type=["xlsx", "xls"])
         
-        if uploaded_file:
+        if up_file:
             try:
-                if uploaded_file.name.endswith('.csv'):
-                    df_import = pd.read_csv(uploaded_file)
-                    st.write("Чтение файла: **CSV**")
-                else:
-                    excel_data = pd.ExcelFile(uploaded_file)
-                    target_sheet = 'Test' if 'Test' in excel_data.sheet_names else excel_data.sheet_names[0]
-                    
-                    # Пробуем прочитать файл. Если первая строка пустая, пробуем со смещением
-                    df_import = pd.read_excel(uploaded_file, sheet_name=target_sheet)
-                    if df_import.columns[0].startswith('Unnamed') or df_import.iloc[:, 1].isnull().all():
-                        df_import = pd.read_excel(uploaded_file, sheet_name=target_sheet, skiprows=1)
-                    
-                    st.write(f"Чтение листа: **{target_sheet}**")
+                xl = pd.ExcelFile(up_file)
+                t_sheet = 'Test' if 'Test' in xl.sheet_names else xl.sheet_names[0]
+                # Читаем как есть, без заголовков, чтобы видеть всё
+                df_import = pd.read_excel(up_file, sheet_name=t_sheet, header=None)
                 
-                # Принудительно приводим заголовки к нижнему регистру для поиска
-                df_import.columns = [str(c).strip().lower() for c in df_import.columns]
+                st.write(f"Лист: **{t_sheet}**")
+                st.dataframe(df_import.head(10)) # Показываем первые 10 строк
                 
-                st.write("Предпросмотр данных (первые 5 строк):")
-                st.dataframe(df_import.head())
-                
-                if st.button("Начать импорт"):
+                if st.button("🚀 НАЧАТЬ ИМПОРТ"):
                     count = 0
                     for index, row in df_import.iterrows():
+                        vals = row.values
+                        # Пропускаем строку, если она слишком короткая
+                        if len(vals) < 3: continue
+                        
+                        # Пропускаем технические строки и заголовки
+                        name_val = str(vals[1])
+                        if name_val.lower() in ['nan', 'name', 'имя', 'фио', '']: continue
+                        
                         try:
-                            # Извлекаем данные (ищем колонки name, phone и т.д. в любом регистре)
-                            name = str(row.get('name', '')).strip()
-                            phone = str(row.get('phone', '')).strip()
-                            email = str(row.get('email', '')).strip()
-                            course = str(row.get('city/course', '')).strip()
-                            comment = str(row.get('comments', '')).strip()
+                            # Берем данные по индексам колонок (1-Имя, 2-Телефон, 3-Email, 4-Курс, 6-Коммент)
+                            name = str(vals[1]).strip()
+                            phone = str(vals[2]).strip()
+                            email = str(vals[3]).strip() if len(vals) > 3 else ""
+                            course = str(vals[4]).strip() if len(vals) > 4 else ""
+                            comment = str(vals[6]).strip() if len(vals) > 6 else ""
 
-                            # Очистка от "nan"
+                            # Чистим от NaN
                             name = "" if name.lower() == "nan" else name
                             phone = "" if phone.lower() == "nan" else phone
                             email = "" if email.lower() == "nan" else email
                             course = "" if course.lower() == "nan" else course
                             comment = "" if comment.lower() == "nan" else comment
 
-                            if not name and not phone:
-                                continue
-
-                            add_lead(name, phone, email, course, f"Excel Import ({target_sheet})", comment=comment)
-                            count += 1
-                        except Exception as e:
-                            st.error(f"Ошибка в строке {index + 1}: {e}")
+                            if name or phone:
+                                add_lead(name, phone, email, course, f"Import {t_sheet}", comment=comment)
+                                count += 1
+                        except:
+                            continue
                     
                     if count > 0:
-                        st.success(f"✅ Успешно импортировано {count} лидов!")
+                        st.success(f"✅ ПОБЕДА! Импортировано {count} лидов!")
                         st.rerun()
                     else:
-                        st.warning("⚠️ Не найдено данных. Проверьте, что колонки называются Name и Phone.")
+                        st.warning("⚠️ Лиды не найдены. Проверьте, что во втором столбце есть имена.")
             except Exception as e:
                 st.error(f"Ошибка: {e}")
 
     # --- УПРАВЛЕНИЕ ДОСТУПОМ ---
     elif choice == "Управление доступом" and st.session_state["role"] == "superadmin":
-        st.subheader("🔑 Управление разрешенными Email")
-        new_email = st.text_input("Добавить новый Email:")
+        st.subheader("🔑 Доступ")
+        new_e = st.text_input("Новый Email:")
         if st.button("Добавить"):
-            add_allowed_email(new_email)
+            add_allowed_email(new_e)
             st.rerun()
-            
-        allowed_emails = get_allowed_emails()
-        for email in allowed_emails:
-            col1, col2 = st.columns([4, 1])
-            col1.write(email)
-            if col2.button("Удалить", key=email):
-                delete_allowed_email(email)
+        for e in get_allowed_emails():
+            c1, c2 = st.columns([4, 1])
+            c1.write(e)
+            if c2.button("Удалить", key=e):
+                delete_allowed_email(e)
                 st.rerun()
 
 if __name__ == "__main__":
