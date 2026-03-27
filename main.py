@@ -39,122 +39,115 @@ def main():
 
     # --- ЛИДЫ ---
     if choice == "Лиды":
-        st.subheader("📋 Список Лидов")
+        st.subheader("📋 Список лидов")
         
         leads = get_leads()
-        if leads:
+        if not leads:
+            st.info("Лидов пока нет.")
+        else:
             df = pd.DataFrame(leads)
             
-            # Formatting for WhatsApp
-            def format_whatsapp(phone):
-                if not phone: return ""
-                clean_phone = "".join(filter(str.isdigit, str(phone)))
-                return f"https://wa.me/{clean_phone}"
-            
-            df['WhatsApp'] = df['phone'].apply(format_whatsapp)
-            
-            # Display configuration
-            cols_to_show = ["id", "full_name", "phone", "email", "course_name", "source", "callback_time", "comment", "status_color", "WhatsApp"]
-            
-            # Search
-            search_query = st.text_input("Поиск (Имя, Телефон, Комментарий...):")
-            if search_query:
-                mask = df.astype(str).apply(lambda x: x.str.contains(search_query, case=False, na=False)).any(axis=1)
-                df = df[mask]
-                
-            # Column configuration
-            st.data_editor(
-                df[cols_to_show],
-                column_config={
-                    "WhatsApp": st.column_config.LinkColumn("WhatsApp Chat", width="small"),
-                    "status_color": st.column_config.SelectboxColumn(
-                        "Статус (Цвет)",
-                        options=["white", "blue", "yellow", "red"],
-                        required=True
-                    )
-                },
-                disabled=["id", "created_at"],
-                hide_index=True,
-                key="leads_editor",
-                use_container_width=True
-            )
-            
-            if st.button("Сохранить изменения"):
-                # Handle updates from data_editor
-                # Note: st.session_state.leads_editor contains 'edited_rows'
-                edits = st.session_state.leads_editor.get("edited_rows", {})
-                for row_idx, changes in edits.items():
-                    lead_id = df.iloc[int(row_idx)]["id"]
-                    update_lead(lead_id, **changes)
-                st.success("Изменения сохранены!")
-                st.rerun()
+            # Reorder columns for display
+            cols = ["id", "full_name", "phone", "email", "course_name", "source", "status_color", "comment", "created_at"]
+            df = df[cols]
 
-        else:
-            st.info("Лидов пока нет.")
+            for index, row in df.iterrows():
+                with st.expander(f"{row['full_name']} | {row['phone']} | {row['course_name']}"):
+                    bg_color = get_status_color(row['status_color'])
+                    st.markdown(f'<div style="background-color:{bg_color}; padding:10px; border-radius:5px;">', unsafe_allow_html=True)
+                    
+                    col1, col2, col3 = st.columns(3)
+                    new_name = col1.text_input("Имя", row['full_name'], key=f"name_{row['id']}")
+                    new_phone = col2.text_input("Телефон", row['phone'], key=f"phone_{row['id']}")
+                    new_email = col3.text_input("Email", row['email'], key=f"email_{row['id']}")
+                    
+                    col4, col5, col6 = st.columns(3)
+                    new_course = col4.text_input("Курс", row['course_name'], key=f"course_{row['id']}")
+                    new_status = col5.selectbox("Статус (цвет)", ["white", "blue", "yellow", "red"], 
+                                              index=["white", "blue", "yellow", "red"].index(row['status_color']),
+                                              key=f"status_{row['id']}")
+                    new_source = col6.text_input("Источник", row['source'], key=f"source_{row['id']}")
+                    
+                    new_comment = st.text_area("Комментарий", row['comment'], key=f"comm_{row['id']}")
+                    
+                    if st.button("Сохранить изменения", key=f"save_{row['id']}"):
+                        update_lead(row['id'], full_name=new_name, phone=new_phone, email=new_email, 
+                                    course_name=new_course, status_color=new_status, comment=new_comment, source=new_source)
+                        st.success("Обновлено!")
+                        st.rerun()
+                    
+                    if st.session_state["role"] == "superadmin":
+                        if st.button("❌ Удалить лид", key=f"del_{row['id']}"):
+                            delete_lead(row['id'])
+                            st.rerun()
+                    
+                    st.markdown('</div>', unsafe_allow_html=True)
 
     # --- ДОБАВИТЬ ЛИД ---
     elif choice == "Добавить лид":
-        st.subheader("➕ Создать нового Лида")
-        with st.form("new_lead_form"):
-            full_name = st.text_input("ФИО / Full Name (RU/EN/HE)")
-            phone = st.text_input("Телефон / Phone")
-            email = st.text_input("Email")
-            course_name = st.text_input("Название курса")
-            source = st.selectbox("Источник", ["Google", "Facebook", "Telegram", "Другое"])
-            callback_time = st.date_input("Дата звонка")
-            comment = st.text_area("Комментарий")
-            status_color = st.selectbox("Статус (Цвет)", ["white", "blue", "yellow", "red"])
+        st.subheader("➕ Добавить нового лида")
+        with st.form("add_form"):
+            f_name = st.text_input("ФИО")
+            f_phone = st.text_input("Телефон")
+            f_email = st.text_input("Email")
+            f_course = st.text_input("Курс")
+            f_source = st.text_input("Источник", value="Manual")
+            f_comment = st.text_area("Комментарий")
             
-            submitted = st.form_submit_button("Сохранить")
+            submitted = st.form_submit_button("Добавить")
             if submitted:
-                try:
-                    add_lead(full_name, phone, email, course_name, source, callback_time, comment, status_color)
-                    st.success(f"Лид {full_name} успешно добавлен!")
-                except Exception as e:
-                    st.error(f"Ошибка: {e}")
+                if f_name or f_phone:
+                    add_lead(f_name, f_phone, f_email, f_course, f_source, comment=f_comment)
+                    st.success("Лид добавлен!")
+                else:
+                    st.error("Имя или телефон обязательны")
 
     # --- ИМПОРТ / ЭКСПОРТ ---
     elif choice == "Импорт/Экспорт":
-        st.subheader("💾 Работа с Excel")
+        st.subheader("📂 Импорт лидов из Excel")
+        uploaded_file = st.file_uploader("Выберите Excel файл", type=["xlsx", "xls", "csv"])
         
-        # Export
-        if st.button("Скачать всех Лидов (Excel)"):
-            leads = get_leads()
-            if leads:
-                df_export = pd.DataFrame(leads)
-                output = pd.ExcelWriter("leads_export.xlsx", engine='xlsxwriter')
-                df_export.to_excel(output, index=False, sheet_name='Leads')
-                output.close()
-                with open("leads_export.xlsx", "rb") as f:
-                    st.download_button("Нажмите здесь для загрузки", f, "leads_export.xlsx")
-            else:
-                st.warning("Нет данных для экспорта.")
-        
-        st.divider()
-        
-        # Import
-        uploaded_file = st.file_uploader("Загрузить лидов из Excel", type=["xlsx"])
         if uploaded_file:
-            df_import = pd.read_excel(uploaded_file)
+            if uploaded_file.name.endswith('.csv'):
+                df_import = pd.read_csv(uploaded_file)
+            else:
+                df_import = pd.read_excel(uploaded_file)
+            
             st.write("Предпросмотр данных:")
             st.dataframe(df_import.head())
+            
             if st.button("Начать импорт"):
                 count = 0
                 for _, row in df_import.iterrows():
                     try:
+                        # Сопоставляем заголовки из вашей вкладки "Test"
+                        # Используем .get() и проверку на пустые значения (NaN)
+                        name = row.get('Name', '')
+                        phone = row.get('Phone', '')
+                        email = row.get('Email', '')
+                        course = row.get('City/Course', '')
+                        comment = row.get('Comments', '')
+
+                        # Пропускаем строки, где нет ни имени, ни телефона
+                        if pd.isna(name) and pd.isna(phone):
+                            continue
+
+                        # Превращаем данные в строку, заменяя NaN на пустую строку
                         add_lead(
-                            row.get('full_name', ''), 
-                            str(row.get('phone', '')), 
-                            row.get('email', ''),
-                            row.get('course_name', ''),
-                            row.get('source', ''),
-                            comment=row.get('comment', ''),
-                            status_color=row.get('status_color', 'white')
+                            str(name) if pd.notna(name) else '', 
+                            str(phone) if pd.notna(phone) else '', 
+                            str(email) if pd.notna(email) else '',
+                            str(course) if pd.notna(course) else '',
+                            "Excel Import (Test)", # Источник
+                            comment=str(comment) if pd.notna(comment) else '',
+                            status_color='white'
                         )
                         count += 1
                     except Exception as e:
                         st.error(f"Ошибка в строке {count+1}: {e}")
+                
                 st.success(f"Импортировано {count} лидов!")
+                st.rerun()
 
     # --- УПРАВЛЕНИЕ ДОСТУПОМ ---
     elif choice == "Управление доступом" and st.session_state["role"] == "superadmin":
