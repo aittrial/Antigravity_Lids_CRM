@@ -46,8 +46,6 @@ def main():
             st.info("Лидов пока нет.")
         else:
             df = pd.DataFrame(leads)
-            
-            # Reorder columns for display
             cols = ["id", "full_name", "phone", "email", "course_name", "source", "status_color", "comment", "created_at"]
             df = df[cols]
 
@@ -80,7 +78,6 @@ def main():
                         if st.button("❌ Удалить лид", key=f"del_{row['id']}"):
                             delete_lead(row['id'])
                             st.rerun()
-                    
                     st.markdown('</div>', unsafe_allow_html=True)
 
     # --- ДОБАВИТЬ ЛИД ---
@@ -113,14 +110,18 @@ def main():
                     df_import = pd.read_csv(uploaded_file)
                     st.write("Чтение файла: **CSV**")
                 else:
-                    # Умный поиск нужного листа
                     excel_data = pd.ExcelFile(uploaded_file)
-                    sheet_names = excel_data.sheet_names
+                    target_sheet = 'Test' if 'Test' in excel_data.sheet_names else excel_data.sheet_names[0]
                     
-                    # Если есть лист "Test" - берем его, иначе первый по списку
-                    target_sheet = 'Test' if 'Test' in sheet_names else sheet_names[0]
+                    # Пробуем прочитать файл. Если первая строка пустая, пробуем со смещением
                     df_import = pd.read_excel(uploaded_file, sheet_name=target_sheet)
+                    if df_import.columns[0].startswith('Unnamed') or df_import.iloc[:, 1].isnull().all():
+                        df_import = pd.read_excel(uploaded_file, sheet_name=target_sheet, skiprows=1)
+                    
                     st.write(f"Чтение листа: **{target_sheet}**")
+                
+                # Принудительно приводим заголовки к нижнему регистру для поиска
+                df_import.columns = [str(c).strip().lower() for c in df_import.columns]
                 
                 st.write("Предпросмотр данных (первые 5 строк):")
                 st.dataframe(df_import.head())
@@ -129,33 +130,24 @@ def main():
                     count = 0
                     for index, row in df_import.iterrows():
                         try:
-                            # Извлекаем данные по именам колонок из листа Test
-                            name = str(row.get('Name', '')).strip()
-                            phone = str(row.get('Phone', '')).strip()
-                            email = str(row.get('Email', '')).strip()
-                            course = str(row.get('City/Course', '')).strip()
-                            comment = str(row.get('Comments', '')).strip()
+                            # Извлекаем данные (ищем колонки name, phone и т.д. в любом регистре)
+                            name = str(row.get('name', '')).strip()
+                            phone = str(row.get('phone', '')).strip()
+                            email = str(row.get('email', '')).strip()
+                            course = str(row.get('city/course', '')).strip()
+                            comment = str(row.get('comments', '')).strip()
 
-                            # Очистка от "nan", если ячейки пустые
+                            # Очистка от "nan"
                             name = "" if name.lower() == "nan" else name
                             phone = "" if phone.lower() == "nan" else phone
                             email = "" if email.lower() == "nan" else email
                             course = "" if course.lower() == "nan" else course
                             comment = "" if comment.lower() == "nan" else comment
 
-                            # Пропускаем, только если и имя, и телефон совсем пустые
                             if not name and not phone:
                                 continue
 
-                            add_lead(
-                                name, 
-                                phone, 
-                                email,
-                                course,
-                                f"Excel Import ({target_sheet if 'target_sheet' in locals() else 'CSV'})", 
-                                comment=comment,
-                                status_color='white'
-                            )
+                            add_lead(name, phone, email, course, f"Excel Import ({target_sheet})", comment=comment)
                             count += 1
                         except Exception as e:
                             st.error(f"Ошибка в строке {index + 1}: {e}")
@@ -164,22 +156,19 @@ def main():
                         st.success(f"✅ Успешно импортировано {count} лидов!")
                         st.rerun()
                     else:
-                        st.warning("⚠️ Не найдено данных для импорта. Проверьте заголовки: Name, Phone")
+                        st.warning("⚠️ Не найдено данных. Проверьте, что колонки называются Name и Phone.")
             except Exception as e:
-                st.error(f"Ошибка при обработке файла: {e}")
+                st.error(f"Ошибка: {e}")
 
     # --- УПРАВЛЕНИЕ ДОСТУПОМ ---
     elif choice == "Управление доступом" and st.session_state["role"] == "superadmin":
         st.subheader("🔑 Управление разрешенными Email")
-        
         new_email = st.text_input("Добавить новый Email:")
         if st.button("Добавить"):
             add_allowed_email(new_email)
-            st.success(f"Email {new_email} добавлен.")
             st.rerun()
             
         allowed_emails = get_allowed_emails()
-        st.write("Список разрешенных Email:")
         for email in allowed_emails:
             col1, col2 = st.columns([4, 1])
             col1.write(email)
