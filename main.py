@@ -108,46 +108,65 @@ def main():
         uploaded_file = st.file_uploader("Выберите Excel файл", type=["xlsx", "xls", "csv"])
         
         if uploaded_file:
-            if uploaded_file.name.endswith('.csv'):
-                df_import = pd.read_csv(uploaded_file)
-            else:
-                df_import = pd.read_excel(uploaded_file, sheet_name='Test')
-            
-            st.write("Предпросмотр данных:")
-            st.dataframe(df_import.head())
-            
-            if st.button("Начать импорт"):
-                count = 0
-                for _, row in df_import.iterrows():
-                    try:
-                        # Сопоставляем заголовки из вашей вкладки "Test"
-                        # Используем .get() и проверку на пустые значения (NaN)
-                        name = row.get('Name', '')
-                        phone = row.get('Phone', '')
-                        email = row.get('Email', '')
-                        course = row.get('City/Course', '')
-                        comment = row.get('Comments', '')
-
-                        # # Пропускаем строки, где нет ни имени, ни телефона
-                        # if pd.isna(name) and pd.isna(phone):
-                        #     continue
-
-                        # Превращаем данные в строку, заменяя NaN на пустую строку
-                        add_lead(
-                            str(name) if pd.notna(name) else '', 
-                            str(phone) if pd.notna(phone) else '', 
-                            str(email) if pd.notna(email) else '',
-                            str(course) if pd.notna(course) else '',
-                            "Excel Import (Test)", # Источник
-                            comment=str(comment) if pd.notna(comment) else '',
-                            status_color='white'
-                        )
-                        count += 1
-                    except Exception as e:
-                        st.error(f"Ошибка в строке {count+1}: {e}")
+            try:
+                if uploaded_file.name.endswith('.csv'):
+                    df_import = pd.read_csv(uploaded_file)
+                    st.write("Чтение файла: **CSV**")
+                else:
+                    # Умный поиск нужного листа
+                    excel_data = pd.ExcelFile(uploaded_file)
+                    sheet_names = excel_data.sheet_names
+                    
+                    # Если есть лист "Test" - берем его, иначе первый по списку
+                    target_sheet = 'Test' if 'Test' in sheet_names else sheet_names[0]
+                    df_import = pd.read_excel(uploaded_file, sheet_name=target_sheet)
+                    st.write(f"Чтение листа: **{target_sheet}**")
                 
-                st.success(f"Импортировано {count} лидов!")
-                st.rerun()
+                st.write("Предпросмотр данных (первые 5 строк):")
+                st.dataframe(df_import.head())
+                
+                if st.button("Начать импорт"):
+                    count = 0
+                    for index, row in df_import.iterrows():
+                        try:
+                            # Извлекаем данные по именам колонок из листа Test
+                            name = str(row.get('Name', '')).strip()
+                            phone = str(row.get('Phone', '')).strip()
+                            email = str(row.get('Email', '')).strip()
+                            course = str(row.get('City/Course', '')).strip()
+                            comment = str(row.get('Comments', '')).strip()
+
+                            # Очистка от "nan", если ячейки пустые
+                            name = "" if name.lower() == "nan" else name
+                            phone = "" if phone.lower() == "nan" else phone
+                            email = "" if email.lower() == "nan" else email
+                            course = "" if course.lower() == "nan" else course
+                            comment = "" if comment.lower() == "nan" else comment
+
+                            # Пропускаем, только если и имя, и телефон совсем пустые
+                            if not name and not phone:
+                                continue
+
+                            add_lead(
+                                name, 
+                                phone, 
+                                email,
+                                course,
+                                f"Excel Import ({target_sheet if 'target_sheet' in locals() else 'CSV'})", 
+                                comment=comment,
+                                status_color='white'
+                            )
+                            count += 1
+                        except Exception as e:
+                            st.error(f"Ошибка в строке {index + 1}: {e}")
+                    
+                    if count > 0:
+                        st.success(f"✅ Успешно импортировано {count} лидов!")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ Не найдено данных для импорта. Проверьте заголовки: Name, Phone")
+            except Exception as e:
+                st.error(f"Ошибка при обработке файла: {e}")
 
     # --- УПРАВЛЕНИЕ ДОСТУПОМ ---
     elif choice == "Управление доступом" and st.session_state["role"] == "superadmin":
