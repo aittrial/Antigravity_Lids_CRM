@@ -111,7 +111,7 @@ def main():
             if uploaded_file.name.endswith('.csv'):
                 df_import = pd.read_csv(uploaded_file)
             else:
-                df_import = pd.read_excel(uploaded_file)
+                df_import = pd.read_excel(uploaded_file, sheet_name='Test')
             
             st.write("Предпросмотр данных:")
             st.dataframe(df_import.head())
