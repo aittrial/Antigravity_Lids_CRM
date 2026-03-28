@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime, date, timedelta
 from database import (init_db, get_leads, add_lead, update_lead, delete_lead, 
                       clear_all_leads, get_allowed_emails, add_allowed_email, delete_allowed_email)
 from auth import check_password, logout
 
-st.set_page_config(page_title="Lids_CRM PRO v4.3", layout="wide")
+st.set_page_config(page_title="Lids_CRM PRO v4.4", layout="wide")
 init_db()
 
 def get_status_color(status):
@@ -26,24 +27,40 @@ def main():
     if choice == "Лиды":
         st.subheader("📋 Список лидов")
         
-        search = st.text_input("🔍 Поиск", "")
-        all_leads = get_leads(search if search else None)
+        # Блок фильтров
+        with st.expander("🛠️ Фильтры и Поиск", expanded=True):
+            f_col1, f_col2 = st.columns([2, 2])
+            search = f_col1.text_input("🔍 Поиск по имени/телефону", "")
+            
+            # Фильтр по датам
+            today = date.today()
+            date_range = f_col2.date_input(
+                "📅 Фильтр по дате (От - До)",
+                value=(today - timedelta(days=30), today),
+                key="date_filter"
+            )
+        
+        # Обработка диапазона дат
+        st_date, en_date = None, None
+        if isinstance(date_range, tuple) and len(date_range) == 2:
+            st_date, en_date = date_range
+
+        all_leads = get_leads(search if search else None, st_date, en_date)
         total_count = len(all_leads)
         
-        st.info(f"📊 Всего лидов: **{total_count}**")
+        st.info(f"📊 Найдено лидов: **{total_count}**")
 
-        # Настройки пагинации
+        # Пагинация
         items_per_page = 50
-        num_pages = (total_count // items_per_page) + (1 if total_count % items_per_page > 0 else 0)
+        num_pages = max(1, (total_count // items_per_page) + (1 if total_count % items_per_page > 0 else 0))
         
-        # КНОПКИ НАВИГАЦИИ (В начало / В конец)
+        if 'page' not in st.session_state: st.session_state.page = 1
+
         col_nav1, col_nav2, col_nav3 = st.columns([1, 2, 1])
         if col_nav1.button("⏮ В начало"): st.session_state.page = 1
         if col_nav3.button("В конец ⏭"): st.session_state.page = num_pages
 
-        if 'page' not in st.session_state: st.session_state.page = 1
-        
-        page = st.number_input("Текущая страница", min_value=1, max_value=max(1, num_pages), key="page")
+        page = st.number_input("Страница", min_value=1, max_value=num_pages, key="page")
         
         start_idx = (page - 1) * items_per_page
         current_leads = all_leads[start_idx : start_idx + items_per_page]
@@ -51,7 +68,6 @@ def main():
         for i, row in enumerate(current_leads):
             color = get_status_color(row['status_color'])
             order_num = start_idx + i + 1
-            # 1. Форматирование даты
             date_str = row['created_at'].strftime("%d.%m.%Y %H:%M") if row['created_at'] else "---"
             
             st.markdown(f"""
@@ -84,9 +100,9 @@ def main():
                     if b_del.button("🗑️ Удалить", key=f"del_{row['id']}"):
                         delete_lead(row['id']); st.rerun()
 
-    # --- РАЗДЕЛ ДОБАВИТЬ ЛИД (ИСПРАВЛЕН) ---
+    # --- РАЗДЕЛ ДОБАВИТЬ ЛИД ---
     elif choice == "Добавить лид":
-        st.subheader("➕ Новая запись")
+        st.subheader("➕ Ручное добавление")
         with st.form("manual_add_form", clear_on_submit=True):
             f_name = st.text_input("ФИО")
             f_phone = st.text_input("Телефон")
@@ -106,18 +122,18 @@ def main():
     elif choice == "Импорт/Экспорт":
         st.subheader("📂 Инструменты")
         if st.session_state.get("role") == "superadmin":
-            if st.button("🔥 ОЧИСТИТЬ БАЗУ"):
+            if st.button("🔥 ОЧИСТИТЬ ВСЮ БАЗУ"):
                 clear_all_leads(); st.rerun()
         
         st.divider()
-        up_file = st.file_uploader("Excel", type=["xlsx"])
-        if up_file and st.button("🚀 ИМПОРТ"):
+        up_file = st.file_uploader("Загрузить Excel", type=["xlsx"])
+        if up_file and st.button("🚀 НАЧАТЬ ИМПОРТ"):
             df = pd.read_excel(up_file, header=None)
             for _, r in df.iterrows():
                 v = list(r.values)
                 if len(v) >= 3:
                     add_lead(str(v[1]), str(v[2]), str(v[3]) if len(v)>3 else '', str(v[4]) if len(v)>4 else '', "Excel")
-            st.success("Готово!"); st.rerun()
+            st.success("Импорт завершен!"); st.rerun()
 
     # --- УПРАВЛЕНИЕ АДМИНАМИ ---
     elif choice == "Управление доступом" and st.session_state.get("role") == "superadmin":

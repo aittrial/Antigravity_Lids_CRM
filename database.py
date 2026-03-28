@@ -1,6 +1,7 @@
 import os
 import psycopg2
 import streamlit as st
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -40,6 +41,7 @@ def init_db():
         );
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_id_desc ON leads (id DESC);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads (created_at);")
         conn.commit()
     finally:
         conn.close()
@@ -49,7 +51,6 @@ def add_lead(full_name, phone, email='', course_name='', source='', comment='', 
     if not conn: return
     try:
         cur = conn.cursor()
-        # Гарантируем, что пустые строки заменяются на пустые строки, а не на None ошибки
         cur.execute("""
             INSERT INTO leads (full_name, phone, email, course_name, source, comment, status_color)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -61,16 +62,29 @@ def add_lead(full_name, phone, email='', course_name='', source='', comment='', 
     finally:
         conn.close()
 
-def get_leads(search_query=None):
+def get_leads(search_query=None, start_date=None, end_date=None):
     conn = get_connection()
     if not conn: return []
     try:
         cur = conn.cursor()
+        query = "SELECT * FROM leads WHERE 1=1"
+        params = []
+
         if search_query:
-            query = "SELECT * FROM leads WHERE full_name ILIKE %s OR phone ILIKE %s ORDER BY id DESC"
-            cur.execute(query, (f"%{search_query}%", f"%{search_query}%"))
-        else:
-            cur.execute("SELECT * FROM leads ORDER BY id DESC")
+            query += " AND (full_name ILIKE %s OR phone ILIKE %s)"
+            params.extend([f"%{search_query}%", f"%{search_query}%"])
+        
+        if start_date:
+            query += " AND created_at >= %s"
+            params.append(start_date)
+        
+        if end_date:
+            query += " AND created_at <= %s"
+            # Добавляем конец дня (23:59:59) для корректного фильтра по конечной дате
+            params.append(datetime.combine(end_date, datetime.max.time()))
+
+        query += " ORDER BY id DESC"
+        cur.execute(query, params)
         
         colnames = [desc[0] for desc in cur.description]
         return [dict(zip(colnames, row)) for row in cur.fetchall()]
