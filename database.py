@@ -7,7 +7,6 @@ load_dotenv()
 
 def get_connection():
     try:
-        # Прямое подключение для Railway с поддержкой SSL
         conn = psycopg2.connect(
             host=os.getenv("DB_HOST"),
             port=os.getenv("DB_PORT"),
@@ -18,7 +17,7 @@ def get_connection():
         )
         return conn
     except Exception as e:
-        st.error(f"❌ Ошибка подключения: {e}")
+        st.error(f"❌ Ошибка базы: {e}")
         return None
 
 def init_db():
@@ -26,9 +25,7 @@ def init_db():
     if not conn: return
     try:
         cur = conn.cursor()
-        # Таблица для разрешенных Email
         cur.execute("CREATE TABLE IF NOT EXISTS allowed_emails (email VARCHAR(255) PRIMARY KEY);")
-        # Таблица лидов со всеми полями
         cur.execute("""
         CREATE TABLE IF NOT EXISTS leads (
             id SERIAL PRIMARY KEY,
@@ -103,7 +100,6 @@ def clear_all_leads():
     finally:
         conn.close()
 
-# Функции для управления админами
 def get_allowed_emails():
     conn = get_connection()
     if not conn: return []
