@@ -40,8 +40,7 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """)
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads (created_at);")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_status ON leads (status_color);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_id_desc ON leads (id DESC);")
         conn.commit()
     finally:
         conn.close()
@@ -57,18 +56,17 @@ def add_lead(full_name, phone, email='', course_name='', source='', comment='', 
         """, (str(full_name or ""), str(phone or ""), str(email or ""), 
               str(course_name or ""), str(source or ""), str(comment or ""), str(status_color or "white")))
         conn.commit()
-    except Exception as e:
-        st.error(f"Ошибка при добавлении: {e}")
     finally:
         conn.close()
 
-def get_leads(search_query=None, start_date=None, end_date=None):
+def get_leads(search_query=None, start_date=None, end_date=None, limit_150=False, offset_150=False):
     conn = get_connection()
     if not conn: return []
     try:
         cur = conn.cursor()
         query = "SELECT * FROM leads WHERE 1=1"
         params = []
+        
         if search_query:
             query += " AND (full_name ILIKE %s OR phone ILIKE %s)"
             params.extend([f"%{search_query}%", f"%{search_query}%"])
@@ -78,7 +76,14 @@ def get_leads(search_query=None, start_date=None, end_date=None):
         if end_date:
             query += " AND created_at <= %s"
             params.append(datetime.combine(end_date, datetime.max.time()))
+
         query += " ORDER BY id DESC"
+        
+        if limit_150:
+            query += " LIMIT 150"
+        elif offset_150:
+            query += " OFFSET 150"
+
         cur.execute(query, params)
         colnames = [desc[0] for desc in cur.description]
         return [dict(zip(colnames, row)) for row in cur.fetchall()]
