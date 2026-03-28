@@ -61,6 +61,7 @@ def get_leads():
     if not conn: return []
     try:
         cur = conn.cursor()
+        # Сортировка по ID, чтобы порядковые номера были логичными
         cur.execute("SELECT * FROM leads ORDER BY id DESC")
         colnames = [desc[0] for desc in cur.description]
         return [dict(zip(colnames, row)) for row in cur.fetchall()]

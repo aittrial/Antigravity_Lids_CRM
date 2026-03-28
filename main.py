@@ -5,9 +5,10 @@ from database import (init_db, get_leads, add_lead, update_lead, delete_lead,
                       clear_all_leads, get_allowed_emails, add_allowed_email, delete_allowed_email)
 from auth import check_password, logout
 
-st.set_page_config(page_title="Lids_CRM v3.7 PRO", layout="wide")
+st.set_page_config(page_title="Lids_CRM v3.8 PRO", layout="wide")
 init_db()
 
+# Цвета для окрашивания блоков лидов
 def get_status_color(status):
     colors = {
         "blue": "#E3F2FD", 
@@ -30,18 +31,43 @@ def main():
     choice = st.sidebar.selectbox("Меню", menu)
     if st.sidebar.button("Выйти"): logout()
 
+    # --- ЛИДЫ ---
     if choice == "Лиды":
         st.subheader("📋 Список лидов")
         leads = get_leads()
         
-        for row in leads:
+        for i, row in enumerate(leads):
             color = get_status_color(row['status_color'])
             
-            with st.expander(f"👤 {row['full_name']} | 📞 {row['phone']} | 📚 {row['course_name']}"):
-                # Окрашивание внутреннего контента карточки
-                st.markdown(f"""
-                    <div style="background-color:{color}; padding:20px; border-radius:10px; border:1px solid #ddd; color:black;">
-                """, unsafe_allow_html=True)
+            # Порядковый номер (i+1, так как enumeration начинается с 0)
+            order_number = i + 1
+            
+            # Окрашиваем весь блок expander с помощью HTML/CSS вставки
+            st.markdown(f"""
+                <style>
+                div[data-indexed-key="expander-{row['id']}"] {{
+                    background-color: {color};
+                    border-radius: 10px;
+                    border: 1px solid #ddd;
+                    margin-bottom: 15px;
+                    overflow: hidden;
+                }}
+                /* Стиль для заголовка expander */
+                div[data-indexed-key="expander-{row['id']}"] .st-b5 {{
+                    padding: 10px 15px;
+                    color: black;
+                    font-weight: bold;
+                }}
+                /* Стиль для иконки expander */
+                div[data-indexed-key="expander-{row['id']}"] .st-b5 svg {{
+                    fill: black;
+                }}
+                </style>
+            """, unsafe_allow_html=True)
+            
+            # Заголовок экспандера с порядковым номером
+            with st.expander(f"#{order_number} | 👤 {row['full_name']} | 📞 {row['phone']} | 📚 {row['course_name']}", expanded=False):
+                st.container()
                 
                 c1, c2, c3 = st.columns(3)
                 n = c1.text_input("Имя", row['full_name'], key=f"n_{row['id']}")
@@ -60,14 +86,14 @@ def main():
                 if b1.button("💾 Сохранить", key=f"sv_{row['id']}"):
                     update_lead(row['id'], full_name=n, phone=p, email=e, 
                                 course_name=curr_c, status_color=curr_s, comment=curr_comm, source=curr_src)
+                    # Принудительная перезагрузка для применения CSS к заголовку
                     st.rerun()
                 
                 if st.session_state.get("role") == "superadmin":
                     if b2.button("🗑️ Удалить", key=f"del_{row['id']}"):
                         delete_lead(row['id']); st.rerun()
-                
-                st.markdown("</div>", unsafe_allow_html=True)
 
+    # --- ДОБАВИТЬ ЛИД ---
     elif choice == "Добавить лид":
         st.subheader("➕ Новый лид")
         with st.form("manual"):
@@ -77,6 +103,7 @@ def main():
                 add_lead(n, p, e, c, "Manual", comment=comm)
                 st.success("Добавлен!"); st.rerun()
 
+    # --- ИМПОРТ ---
     elif choice == "Импорт/Экспорт":
         st.subheader("📂 Инструменты")
         if st.session_state.get("role") == "superadmin":
@@ -96,6 +123,7 @@ def main():
                     add_lead(name, phone, str(v[3]) if len(v)>3 else '', str(v[4]) if len(v)>4 else '', "Excel", str(v[6]) if len(v)>6 else '')
                 st.rerun()
 
+    # --- АДМИНЫ ---
     elif choice == "Управление доступом" and st.session_state.get("role") == "superadmin":
         st.subheader("🔑 Управление админами")
         new_mail = st.text_input("Email:")
