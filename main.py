@@ -18,7 +18,7 @@ def get_status_color(status):
 
 def render_leads_list(leads_data, start_order=1):
     if not leads_data:
-        st.info("В этом разделе пока пусто.")
+        st.info("По заданным фильтрам ничего не найдено.")
         return
     for i, row in enumerate(leads_data):
         color = get_status_color(row['status_color'])
@@ -100,10 +100,13 @@ def main():
     # --- СПИСОК ЛИДОВ ---
     elif choice == "👥 Список лидов":
         st.header("👥 Работа с лидами")
+        
+        # БЛОК ФИЛЬТРОВ (ПОИСК, ДАТА, ЦВЕТ)
         with st.container():
-            f_col1, f_col2 = st.columns([2, 2])
-            search = f_col1.text_input("🔍 Быстрый поиск (Имя или телефон)", "", key="main_search")
-            d_range = f_col2.date_input("📅 Фильтр по дате", value=(default_start, today), key="main_date")
+            f_col1, f_col2, f_col3 = st.columns([2, 1.5, 1])
+            search = f_col1.text_input("🔍 Поиск (Имя или телефон)", "", key="main_search")
+            d_range = f_col2.date_input("📅 Дата", value=(default_start, today), key="main_date")
+            color_f = f_col3.selectbox("🎨 Цвет", ["Все", "Белый", "Синий", "Желтый", "Красный"], key="main_color")
         
         st_d, en_d = (d_range[0], d_range[1]) if len(d_range) == 2 else (None, None)
         st.divider()
@@ -111,12 +114,12 @@ def main():
         tab_active, tab_archive = st.tabs(["🔥 Главная (Активные)", "📦 Весь Архив"])
         
         with tab_active:
-            leads_active = get_leads(search if search else None, st_d, en_d, mode="active")
-            st.info(f"Активных лидов: **{len(leads_active)}** (ТОП-50 последних)")
+            leads_active = get_leads(search if search else None, st_d, en_d, mode="active", status_filter=color_f)
+            st.info(f"Активных лидов: **{len(leads_active)}** (ТОП-50)")
             render_leads_list(leads_active, start_order=1)
 
         with tab_archive:
-            leads_archive = get_leads(search if search else None, st_d, en_d, mode="archive")
+            leads_archive = get_leads(search if search else None, st_d, en_d, mode="archive", status_filter=color_f)
             total_arch = len(leads_archive)
             st.warning(f"Всего в архиве: **{total_arch}**")
             if total_arch > 0:
@@ -197,7 +200,6 @@ def main():
             df_up = pd.read_excel(up, header=None)
             for _, r in df_up.iterrows():
                 v = list(r.values)
-                # Предполагаем колонки: ФИО, Телефон, Email, Курс, Время...
                 if len(v) >= 3: add_lead(str(v[1]), str(v[2]), str(v[3]) if len(v)>3 else '', str(v[4]) if len(v)>4 else '', str(v[5]) if len(v)>5 else '', "Excel")
             st.success("Данные загружены!"); st.rerun()
 
