@@ -4,7 +4,7 @@ from database import (init_db, get_leads, add_lead, update_lead, delete_lead,
                       clear_all_leads, get_allowed_emails, add_allowed_email, delete_allowed_email)
 from auth import check_password, logout
 
-st.set_page_config(page_title="Lids_CRM PRO v4.2", layout="wide")
+st.set_page_config(page_title="Lids_CRM PRO v4.3", layout="wide")
 init_db()
 
 def get_status_color(status):
@@ -26,40 +26,41 @@ def main():
     if choice == "Лиды":
         st.subheader("📋 Список лидов")
         
-        # Поиск и фильтрация
-        search = st.text_input("🔍 Поиск по имени или телефону", "")
+        search = st.text_input("🔍 Поиск", "")
         all_leads = get_leads(search if search else None)
         total_count = len(all_leads)
         
-        # 3. СЧЕТЧИК
-        st.info(f"📊 Всего лидов в базе: **{total_count}**")
+        st.info(f"📊 Всего лидов: **{total_count}**")
 
-        # 1. ПАГИНАЦИЯ (чтобы не грузить всё сразу)
+        # Настройки пагинации
         items_per_page = 50
         num_pages = (total_count // items_per_page) + (1 if total_count % items_per_page > 0 else 0)
         
-        if total_count > items_per_page:
-            page = st.number_input("Страница", min_value=1, max_value=num_pages, step=1)
-        else:
-            page = 1
+        # КНОПКИ НАВИГАЦИИ (В начало / В конец)
+        col_nav1, col_nav2, col_nav3 = st.columns([1, 2, 1])
+        if col_nav1.button("⏮ В начало"): st.session_state.page = 1
+        if col_nav3.button("В конец ⏭"): st.session_state.page = num_pages
+
+        if 'page' not in st.session_state: st.session_state.page = 1
+        
+        page = st.number_input("Текущая страница", min_value=1, max_value=max(1, num_pages), key="page")
         
         start_idx = (page - 1) * items_per_page
-        end_idx = start_idx + items_per_page
-        current_leads = all_leads[start_idx:end_idx]
+        current_leads = all_leads[start_idx : start_idx + items_per_page]
 
         for i, row in enumerate(current_leads):
             color = get_status_color(row['status_color'])
             order_num = start_idx + i + 1
+            # 1. Форматирование даты
+            date_str = row['created_at'].strftime("%d.%m.%Y %H:%M") if row['created_at'] else "---"
             
-            # Компактный заголовок
             st.markdown(f"""
                 <div style="background-color:{color}; border-radius:8px; padding:6px 12px; margin-bottom:5px; border:1px solid #ddd; color:black;">
-                    <span style="font-size: 13px; font-weight: bold;">#{order_num} | {row['full_name']} | {row['phone']}</span>
+                    <span style="font-size: 12px; font-weight: bold;">#{order_num} | 📅 {date_str} | {row['full_name']} | {row['phone']}</span>
                 </div>
             """, unsafe_allow_html=True)
             
-            # 2. ЗАКРЫТИЕ (expanded=False по умолчанию)
-            with st.expander("Открыть детали"):
+            with st.expander("Детали"):
                 c1, c2, c3 = st.columns(3)
                 n = c1.text_input("Имя", row['full_name'], key=f"n_{row['id']}")
                 p = c2.text_input("Телефон", row['phone'], key=f"p_{row['id']}")
@@ -73,44 +74,52 @@ def main():
                 
                 curr_comm = st.text_area("Комментарий", row['comment'] if row['comment'] else "", key=f"cm_{row['id']}")
                 
-                b1, b2 = st.columns([1, 5])
-                if b1.button("💾 Сохранить", key=f"sv_{row['id']}"):
+                b_save, b_del = st.columns([1, 5])
+                if b_save.button("💾 Сохранить", key=f"sv_{row['id']}"):
                     update_lead(row['id'], full_name=n, phone=p, email=e, 
                                 course_name=curr_c, status_color=curr_s, comment=curr_comm, source=curr_src)
-                    st.rerun() # Страница обновится, карточка закроется
+                    st.rerun()
                 
                 if st.session_state.get("role") == "superadmin":
-                    if b2.button("🗑️ Удалить", key=f"del_{row['id']}"):
+                    if b_del.button("🗑️ Удалить", key=f"del_{row['id']}"):
                         delete_lead(row['id']); st.rerun()
+
+    # --- РАЗДЕЛ ДОБАВИТЬ ЛИД (ИСПРАВЛЕН) ---
+    elif choice == "Добавить лид":
+        st.subheader("➕ Новая запись")
+        with st.form("manual_add_form", clear_on_submit=True):
+            f_name = st.text_input("ФИО")
+            f_phone = st.text_input("Телефон")
+            f_email = st.text_input("Email")
+            f_course = st.text_input("Курс")
+            f_comm = st.text_area("Комментарий")
+            submit = st.form_submit_button("Добавить в базу")
+            
+            if submit:
+                if f_name and f_phone:
+                    add_lead(f_name, f_phone, f_email, f_course, "Manual", f_comm)
+                    st.success(f"Лид {f_name} успешно добавлен!")
+                else:
+                    st.error("Имя и телефон обязательны!")
 
     # --- РАЗДЕЛ ИМПОРТ ---
     elif choice == "Импорт/Экспорт":
         st.subheader("📂 Инструменты")
         if st.session_state.get("role") == "superadmin":
-            if 'confirm_clear' not in st.session_state: st.session_state.confirm_clear = False
-            if not st.session_state.confirm_clear:
-                if st.button("🔥 ОЧИСТИТЬ ВСЮ БАЗУ"):
-                    st.session_state.confirm_clear = True; st.rerun()
-            else:
-                st.error("УДАЛИТЬ ВСЁ?")
-                cy, cn = st.columns(2)
-                if cy.button("✅ ДА"): clear_all_leads(); st.session_state.confirm_clear = False; st.rerun()
-                if cn.button("❌ НЕТ"): st.session_state.confirm_clear = False; st.rerun()
+            if st.button("🔥 ОЧИСТИТЬ БАЗУ"):
+                clear_all_leads(); st.rerun()
         
         st.divider()
-        up_file = st.file_uploader("Загрузить Excel", type=["xlsx"])
-        if up_file:
-            df = pd.read_excel(up_file, sheet_name=0, header=None)
-            if st.button("🚀 НАЧАТЬ ИМПОРТ"):
-                for i, row in df.iterrows():
-                    v = list(row.values)
-                    if len(v) < 3: continue
-                    name, phone = str(v[1]).strip(), str(v[2]).strip()
-                    if name.lower() in ['nan', ''] or phone.lower() in ['nan', '']: continue
-                    add_lead(name, phone, str(v[3]) if len(v)>3 else '', str(v[4]) if len(v)>4 else '', "Excel", str(v[6]) if len(v)>6 else '')
-                st.success("Импорт завершен!"); st.rerun()
+        up_file = st.file_uploader("Excel", type=["xlsx"])
+        if up_file and st.button("🚀 ИМПОРТ"):
+            df = pd.read_excel(up_file, header=None)
+            for _, r in df.iterrows():
+                v = list(r.values)
+                if len(v) >= 3:
+                    add_lead(str(v[1]), str(v[2]), str(v[3]) if len(v)>3 else '', str(v[4]) if len(v)>4 else '', "Excel")
+            st.success("Готово!"); st.rerun()
 
-    # --- РАЗДЕЛ АДМИНЫ ---
+    # --- УПРАВЛЕНИЕ АДМИНАМИ ---
     elif choice == "Управление доступом" and st.session_state.get("role") == "superadmin":
         st.subheader("🔑 Доступ")
         new_mail = st.text_input("Email:")

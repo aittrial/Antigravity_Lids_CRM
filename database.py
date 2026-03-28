@@ -39,7 +39,6 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """)
-        # Индексы для скорости
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_id_desc ON leads (id DESC);")
         conn.commit()
     finally:
@@ -50,11 +49,15 @@ def add_lead(full_name, phone, email='', course_name='', source='', comment='', 
     if not conn: return
     try:
         cur = conn.cursor()
+        # Гарантируем, что пустые строки заменяются на пустые строки, а не на None ошибки
         cur.execute("""
             INSERT INTO leads (full_name, phone, email, course_name, source, comment, status_color)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (str(full_name), str(phone), str(email), str(course_name), str(source), str(comment), str(status_color)))
+        """, (str(full_name or ""), str(phone or ""), str(email or ""), 
+              str(course_name or ""), str(source or ""), str(comment or ""), str(status_color or "white")))
         conn.commit()
+    except Exception as e:
+        st.error(f"Ошибка при добавлении: {e}")
     finally:
         conn.close()
 
