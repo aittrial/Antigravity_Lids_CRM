@@ -40,7 +40,6 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """)
-        # Индексы для быстрой фильтрации по датам и статусам
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads (created_at);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_status ON leads (status_color);")
         conn.commit()
