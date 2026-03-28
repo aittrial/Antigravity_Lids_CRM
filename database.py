@@ -17,7 +17,7 @@ def get_connection():
         )
         return conn
     except Exception as e:
-        st.error(f"❌ Ошибка базы: {e}")
+        st.error(f"❌ Ошибка подключения: {e}")
         return None
 
 def init_db():
@@ -61,7 +61,6 @@ def get_leads():
     if not conn: return []
     try:
         cur = conn.cursor()
-        # Сортировка по ID, чтобы порядковые номера были логичными
         cur.execute("SELECT * FROM leads ORDER BY id DESC")
         colnames = [desc[0] for desc in cur.description]
         return [dict(zip(colnames, row)) for row in cur.fetchall()]
