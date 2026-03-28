@@ -27,7 +27,6 @@ def init_db():
     try:
         cur = conn.cursor()
         cur.execute("CREATE TABLE IF NOT EXISTS allowed_emails (email VARCHAR(255) PRIMARY KEY);")
-        # Таблица для системных настроек (храним дату архивации)
         cur.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);")
         cur.execute("""
         CREATE TABLE IF NOT EXISTS leads (
@@ -36,12 +35,16 @@ def init_db():
             phone TEXT,
             email TEXT,
             course_name TEXT,
+            preferred_time TEXT,
             source TEXT,
             comment TEXT,
             status_color VARCHAR(50) DEFAULT 'white',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """)
+        # Проверка и добавление колонки, если база уже существует
+        cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS preferred_time TEXT;")
+        
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_id_desc ON leads (id DESC);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads (created_at);")
         conn.commit()
@@ -49,7 +52,6 @@ def init_db():
         conn.close()
 
 def set_archive_threshold():
-    """Устанавливает текущее время как точку отсчета для архива"""
     conn = get_connection()
     if not conn: return
     try:
@@ -61,7 +63,6 @@ def set_archive_threshold():
         conn.close()
 
 def get_archive_threshold():
-    """Получает дату последней ручной архивации"""
     conn = get_connection()
     if not conn: return None
     try:
@@ -72,16 +73,16 @@ def get_archive_threshold():
     finally:
         conn.close()
 
-def add_lead(full_name, phone, email='', course_name='', source='', comment='', status_color='white'):
+def add_lead(full_name, phone, email='', course_name='', preferred_time='', source='', comment='', status_color='white'):
     conn = get_connection()
     if not conn: return
     try:
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO leads (full_name, phone, email, course_name, source, comment, status_color)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO leads (full_name, phone, email, course_name, preferred_time, source, comment, status_color)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (str(full_name or ""), str(phone or ""), str(email or ""), 
-              str(course_name or ""), str(source or ""), str(comment or ""), str(status_color or "white")))
+              str(course_name or ""), str(preferred_time or ""), str(source or ""), str(comment or ""), str(status_color or "white")))
         conn.commit()
     finally:
         conn.close()
@@ -95,19 +96,16 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active"):
         query = "SELECT * FROM leads WHERE 1=1"
         params = []
         
-        # Логика разделения Активные / Архив
         if mode == "active":
             if threshold:
                 query += " AND created_at > %s"
                 params.append(threshold)
-            limit_sql = " LIMIT 50" # Всегда только 50 последних на главной
-        else: # Архив
+            limit_sql = " LIMIT 50"
+        else:
             if threshold:
-                # В архиве всё, что было ДО кнопки ИЛИ всё, что за пределами ТОП-50 (если кнопки не было)
                 query += " AND (created_at <= %s OR id NOT IN (SELECT id FROM leads WHERE created_at > %s ORDER BY id DESC LIMIT 50))"
                 params.extend([threshold, threshold])
             else:
-                # Если ручного сброса не было, просто прячем первые 50
                 query += " AND id NOT IN (SELECT id FROM leads ORDER BY id DESC LIMIT 50)"
             limit_sql = ""
 

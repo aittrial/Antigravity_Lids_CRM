@@ -23,30 +23,39 @@ def render_leads_list(leads_data, start_order=1):
     for i, row in enumerate(leads_data):
         color = get_status_color(row['status_color'])
         date_s = row['created_at'].strftime("%d.%m.%Y %H:%M")
+        pref_time = row.get('preferred_time', 'Не указано')
+        
         st.markdown(f"""
             <div style="background-color:{color}; border-radius:10px; padding:12px; margin-bottom:10px; border:2px solid #444; color: #000000 !important;">
                 <b style="color: #000000 !important; font-size: 14px;">
-                    #{start_order+i} | 📅 {date_s} | {row['full_name']} | {row['phone']}
+                    #{start_order+i} | 📅 {date_s} | 🕒 {pref_time} | {row['full_name']} | {row['phone']}
                 </b>
             </div>
         """, unsafe_allow_html=True)
+        
         with st.expander("Управление лидом"):
             phone_num = ''.join(filter(str.isdigit, str(row['phone'])))
             st.markdown(f'''<a href="https://wa.me/{phone_num}" target="_blank">
                 <button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; width:100%;">
                 💬 WhatsApp</button></a>''', unsafe_allow_html=True)
+            
             c1, c2, c3 = st.columns(3)
             n = c1.text_input("ФИО", row['full_name'], key=f"n_{row['id']}")
             p = c2.text_input("Телефон", row['phone'], key=f"p_{row['id']}")
             e = c3.text_input("Email", row['email'], key=f"e_{row['id']}")
+            
             c4, c5, c6 = st.columns(3)
             curr_c = c4.text_input("Курс", row['course_name'], key=f"c_{row['id']}")
-            curr_s = c5.selectbox("Статус", ["white", "blue", "yellow", "red"], index=["white", "blue", "yellow", "red"].index(row['status_color']), key=f"s_{row['id']}")
-            curr_src = c6.text_input("Источник", row['source'], key=f"src_{row['id']}")
-            curr_comm = st.text_area("Комментарии", row['comment'] if row['comment'] else "", key=f"cm_{row['id']}")
+            curr_t = c5.text_input("Время созвона", row.get('preferred_time', ''), key=f"t_{row['id']}")
+            curr_s = c6.selectbox("Статус", ["white", "blue", "yellow", "red"], index=["white", "blue", "yellow", "red"].index(row['status_color']), key=f"s_{row['id']}")
+            
+            c7, c8 = st.columns(2)
+            curr_src = c7.text_input("Источник", row['source'], key=f"src_{row['id']}")
+            curr_comm = c8.text_area("Комментарии", row['comment'] if row['comment'] else "", key=f"cm_{row['id']}", height=68)
+            
             bs, bd = st.columns([1, 5])
             if bs.button("💾 Сохранить", key=f"sv_{row['id']}"):
-                update_lead(row['id'], full_name=n, phone=p, email=e, course_name=curr_c, status_color=curr_s, comment=curr_comm, source=curr_src)
+                update_lead(row['id'], full_name=n, phone=p, email=e, course_name=curr_c, preferred_time=curr_t, status_color=curr_s, comment=curr_comm, source=curr_src)
                 st.rerun()
             if st.session_state.get("role") == "superadmin" and bd.button("🗑️ Удалить", key=f"del_{row['id']}"):
                 delete_lead(row['id']); st.rerun()
@@ -88,11 +97,9 @@ def main():
             fig_area = px.area(daily, x='Дата', y='Лидов', title="Динамика поступления", template="plotly_white")
             cr.plotly_chart(fig_area, use_container_width=True)
 
-    # --- СПИСОК ЛИДОВ (ПОИСК ВВЕРХУ) ---
+    # --- СПИСОК ЛИДОВ ---
     elif choice == "👥 Список лидов":
         st.header("👥 Работа с лидами")
-        
-        # ПОИСК В САМОМ ВЕРХУ
         with st.container():
             f_col1, f_col2 = st.columns([2, 2])
             search = f_col1.text_input("🔍 Быстрый поиск (Имя или телефон)", "", key="main_search")
@@ -120,16 +127,22 @@ def main():
 
     # --- НОВЫЙ ЛИД ---
     elif choice == "➕ Новый лид":
-        st.header("➕ Добавление записи")
+        st.header("➕ Новая запись")
         with st.form("manual_add", clear_on_submit=True):
-            f_n, f_p, f_e, f_c = st.text_input("ФИО"), st.text_input("Телефон"), st.text_input("Email"), st.text_input("Курс")
+            f1, f2 = st.columns(2)
+            f_n = f1.text_input("ФИО")
+            f_p = f2.text_input("Телефон")
+            f3, f4 = st.columns(2)
+            f_e = f3.text_input("Email")
+            f_t = f4.text_input("Удобное время созвона")
+            f_c = st.text_input("Курс")
             f_cm = st.text_area("Комментарий")
             if st.form_submit_button("Создать запись"):
                 if f_n and f_p:
-                    add_lead(f_n, f_p, f_e, f_c, "Manual", f_cm); st.success("Лид добавлен!"); st.rerun()
+                    add_lead(f_n, f_p, f_e, f_c, f_t, "Manual", f_cm); st.success("Лид добавлен!"); st.rerun()
                 else: st.error("Имя и Телефон обязательны")
 
-    # --- БАЗА ДАННЫХ (РУЧНАЯ АРХИВАЦИЯ) ---
+    # --- БАЗА ДАННЫХ ---
     elif choice == "📂 База данных":
         st.header("📂 Управление базой")
         c_ex, c_arch, c_clr = st.columns(3)
@@ -148,12 +161,10 @@ def main():
         with c_arch:
             st.subheader("📦 Архивация")
             if st.session_state.get("role") == "superadmin":
-                st.write("Очистить Главную?")
                 if 'confirm_arch' not in st.session_state: st.session_state.confirm_arch = False
-                
                 if not st.session_state.confirm_arch:
                     if st.button("📦 ВСЁ В АРХИВ"):
-                        st.session_state.confirm_clear = False # Сброс другой кнопки
+                        st.session_state.confirm_clear = False
                         st.session_state.confirm_arch = True; st.rerun()
                 else:
                     st.warning("Вы уверены? Главная страница станет пустой!")
@@ -162,7 +173,6 @@ def main():
                         set_archive_threshold(); st.session_state.confirm_arch = False; st.success("Успех!"); st.rerun()
                     if ca_n.button("❌ Отмена"):
                         st.session_state.confirm_arch = False; st.rerun()
-            else: st.error("Доступ только для суперадмина")
 
         with c_clr:
             st.subheader("🔥 Очистка")
@@ -170,7 +180,7 @@ def main():
                 if 'confirm_clear' not in st.session_state: st.session_state.confirm_clear = False
                 if not st.session_state.confirm_clear:
                     if st.button("🔥 УДАЛИТЬ ВСЁ"):
-                        st.session_state.confirm_arch = False # Сброс другой кнопки
+                        st.session_state.confirm_arch = False
                         st.session_state.confirm_clear = True; st.rerun()
                 else:
                     st.error("ВЫ УВЕРЕНЫ? Это удалит базу полностью!")
@@ -187,7 +197,8 @@ def main():
             df_up = pd.read_excel(up, header=None)
             for _, r in df_up.iterrows():
                 v = list(r.values)
-                if len(v) >= 3: add_lead(str(v[1]), str(v[2]), str(v[3]) if len(v)>3 else '', str(v[4]) if len(v)>4 else '', "Excel")
+                # Предполагаем колонки: ФИО, Телефон, Email, Курс, Время...
+                if len(v) >= 3: add_lead(str(v[1]), str(v[2]), str(v[3]) if len(v)>3 else '', str(v[4]) if len(v)>4 else '', str(v[5]) if len(v)>5 else '', "Excel")
             st.success("Данные загружены!"); st.rerun()
 
     # --- АДМИНИСТРИРОВАНИЕ ---
