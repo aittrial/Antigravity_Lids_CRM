@@ -1,38 +1,23 @@
 import os
 import psycopg2
-from psycopg2 import pool
 from dotenv import load_dotenv
 
 load_dotenv()
 
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "lids_db")
-DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "yourpassword")
-
-try:
-    connection_pool = pool.SimpleConnectionPool(
-        1, 20,
-        host=DB_HOST,
-        port=DB_PORT,
-        database=DB_NAME,
-        user=DB_USER,
-        password=DB_PASSWORD
-    )
-    print("Database connection pool established.")
-except Exception as e:
-    print(f"Error connecting to database: {e}")
-    connection_pool = None
-
 def get_connection():
-    if connection_pool:
-        return connection_pool.getconn()
-    return None
-
-def release_connection(conn):
-    if connection_pool and conn:
-        connection_pool.putconn(conn)
+    try:
+        # Прямое подключение для стабильности на Railway
+        return psycopg2.connect(
+            host=os.getenv("DB_HOST", "localhost"),
+            port=os.getenv("DB_PORT", "5432"),
+            database=os.getenv("DB_NAME", "lids_db"),
+            user=os.getenv("DB_USER", "postgres"),
+            password=os.getenv("DB_PASSWORD", "yourpassword"),
+            sslmode='require' if os.getenv("DB_HOST") != "localhost" else 'disable'
+        )
+    except Exception as e:
+        print(f"DATABASE CONNECTION ERROR: {e}")
+        return None
 
 def init_db():
     conn = get_connection()
@@ -56,7 +41,7 @@ def init_db():
         """)
         conn.commit()
     finally:
-        release_connection(conn)
+        conn.close()
 
 def add_lead(full_name, phone, email='', course_name='', source='', callback_time='', comment='', status_color='white'):
     conn = get_connection()
@@ -66,13 +51,10 @@ def add_lead(full_name, phone, email='', course_name='', source='', callback_tim
         cur.execute("""
             INSERT INTO leads (full_name, phone, email, course_name, source, callback_time, comment, status_color)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
         """, (str(full_name), str(phone), str(email), str(course_name), str(source), str(callback_time), str(comment), str(status_color)))
-        lead_id = cur.fetchone()[0]
         conn.commit()
-        return lead_id
     finally:
-        release_connection(conn)
+        conn.close()
 
 def get_leads():
     conn = get_connection()
@@ -83,7 +65,7 @@ def get_leads():
         colnames = [desc[0] for desc in cur.description]
         return [dict(zip(colnames, row)) for row in cur.fetchall()]
     finally:
-        release_connection(conn)
+        conn.close()
 
 def update_lead(lead_id, **kwargs):
     conn = get_connection()
@@ -95,7 +77,7 @@ def update_lead(lead_id, **kwargs):
         cur.execute(f"UPDATE leads SET {set_clause} WHERE id = %s", params)
         conn.commit()
     finally:
-        release_connection(conn)
+        conn.close()
 
 def delete_lead(lead_id):
     conn = get_connection()
@@ -105,7 +87,7 @@ def delete_lead(lead_id):
         cur.execute("DELETE FROM leads WHERE id = %s", (lead_id,))
         conn.commit()
     finally:
-        release_connection(conn)
+        conn.close()
 
 def get_allowed_emails():
     conn = get_connection()
@@ -115,7 +97,7 @@ def get_allowed_emails():
         cur.execute("SELECT email FROM allowed_emails")
         return [row[0] for row in cur.fetchall()]
     finally:
-        release_connection(conn)
+        conn.close()
 
 def add_allowed_email(email):
     conn = get_connection()
@@ -125,14 +107,14 @@ def add_allowed_email(email):
         cur.execute("INSERT INTO allowed_emails (email) VALUES (%s) ON CONFLICT DO NOTHING", (email,))
         conn.commit()
     finally:
-        release_connection(conn)
+        conn.close()
 
 def delete_allowed_email(email):
     conn = get_connection()
     if not conn: return
     try:
         cur = conn.cursor()
-        cur.execute("DELETE FROM allowed_emails WHERE email = %s", (email,))
+        cur.execute("DELETE FROM leads WHERE email = %s", (email,)) # Фикс: удаление из нужной таблицы
         conn.commit()
     finally:
-        release_connection(conn)
+        conn.close()

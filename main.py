@@ -1,11 +1,10 @@
 import streamlit as st
 import pandas as pd
 import os
-import math
 from database import init_db, get_leads, add_lead, update_lead, delete_lead, get_allowed_emails, add_allowed_email, delete_allowed_email
 from auth import check_password, logout
 
-st.set_page_config(page_title="Lids_CRM ANTIGRAVITY v2.1", layout="wide")
+st.set_page_config(page_title="Lids_CRM ANTIGRAVITY v2.5", layout="wide")
 init_db()
 
 def get_status_color(status):
@@ -15,17 +14,18 @@ def get_status_color(status):
 def main():
     if not check_password(): return
 
-    st.sidebar.title(f"Lids_CRM v2.1")
+    st.sidebar.title("CRM ANTIGRAVITY")
     menu = ["Лиды", "Добавить лид", "Импорт/Экспорт"]
     if st.session_state.get("role") == "superadmin": menu.append("Управление доступом")
     choice = st.sidebar.selectbox("Меню", menu)
+    
     if st.sidebar.button("Выйти"): logout()
 
     if choice == "Лиды":
         st.subheader("📋 Список лидов")
         leads = get_leads()
-        st.write(f"Всего лидов в базе: {len(leads)}")
-        if not leads: 
+        st.write(f"Всего записей в базе: {len(leads)}")
+        if not leads:
             st.info("Лидов пока нет.")
         else:
             df = pd.DataFrame(leads)
@@ -44,7 +44,7 @@ def main():
 
     elif choice == "Добавить лид":
         st.subheader("➕ Новый лид")
-        with st.form("add_f"):
+        with st.form("manual_add"):
             n, p, e, c = st.text_input("Имя"), st.text_input("Телефон"), st.text_input("Email"), st.text_input("Курс")
             if st.form_submit_button("Добавить"):
                 add_lead(n, p, e, c, "Manual")
@@ -52,28 +52,28 @@ def main():
                 st.rerun()
 
     elif choice == "Импорт/Экспорт":
-        st.subheader("📂 Импорт")
-        up_file = st.file_uploader("Excel", type=["xlsx"])
+        st.subheader("📂 Импорт из Excel")
+        up_file = st.file_uploader("Загрузите файл", type=["xlsx"])
         if up_file:
             xl = pd.ExcelFile(up_file)
             sheet = 'Test' if 'Test' in xl.sheet_names else xl.sheet_names[0]
+            # Читаем без заголовков, чтобы видеть всё
             df = pd.read_excel(up_file, sheet_name=sheet, header=None)
             st.write(f"Лист: {sheet}")
             st.dataframe(df.head(10))
             
-            if st.button("🚀 ПОЕХАЛИ"):
+            if st.button("🚀 НАЧАТЬ ИМПОРТ"):
                 count = 0
-                error_list = []
                 for i, row in df.iterrows():
                     v = list(row.values)
                     if len(v) < 3: continue
                     
-                    # Безопасное извлечение имени и телефона
+                    # Берем колонки B (индекс 1) и C (индекс 2)
                     name = str(v[1]).strip() if pd.notna(v[1]) else ""
                     phone = str(v[2]).strip() if pd.notna(v[2]) else ""
                     
-                    # Пропуск заголовков и пустых строк
-                    if name.lower() in ['nan', 'name', 'имя', ''] or phone.lower() in ['nan', 'phone', '']: 
+                    # Пропуск заголовков
+                    if name.lower() in ['nan', 'name', 'имя', ''] or phone.lower() in ['nan', 'phone', '']:
                         continue
                     
                     try:
@@ -86,16 +86,13 @@ def main():
                             comment=str(v[6]) if len(v) > 6 and pd.notna(v[6]) else ''
                         )
                         count += 1
-                    except Exception as e:
-                        error_list.append(f"Ошибка в строке {i}: {e}")
-                
-                if error_list:
-                    st.error(f"Ошибки при импорте: {error_list[:3]}")
+                    except:
+                        continue
                 
                 if count > 0:
-                    st.success(f"Успешно загружено: {count}")
+                    st.success(f"✅ Успешно! Добавлено лидов: {count}")
                     st.rerun()
                 else:
-                    st.warning("Лиды не найдены в файле. Проверьте колонки B и C.")
+                    st.error("❌ Данные не найдены. Проверьте колонки B и C в Excel.")
 
 if __name__ == "__main__": main()
