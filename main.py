@@ -1,32 +1,25 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import io
 from datetime import datetime, date, timedelta
 from database import (init_db, get_leads, add_lead, update_lead, delete_lead, 
                       clear_all_leads, get_allowed_emails, add_allowed_email, delete_allowed_email)
 from auth import check_password, logout
 
-# Финальное название
 APP_TITLE = "📈 LeadFlow | Lead Management System"
 
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 init_db()
 
 def get_status_color(status):
-    colors = {
-        "blue": "#B3D7FF", 
-        "yellow": "#FFF59D", 
-        "red": "#FFAB91", 
-        "white": "#F0F2F6"
-    }
+    colors = {"blue": "#B3D7FF", "yellow": "#FFF59D", "red": "#FFAB91", "white": "#F0F2F6"}
     return colors.get(status, "#F0F2F6")
 
 def main():
     if not check_password(): return
 
     st.sidebar.markdown(f"### {APP_TITLE}")
-    st.sidebar.write(f"**Аккаунт:** {st.session_state.get('role')}")
-    
     menu = ["📊 Аналитика", "👥 Список лидов", "➕ Новый лид", "📂 База данных"]
     if st.session_state.get("role") == "superadmin":
         menu.append("🔑 Администрирование")
@@ -37,40 +30,53 @@ def main():
     today = date.today()
     default_start = today - timedelta(days=30)
     
-    # --- АНАЛИТИКА ---
+    # --- АНАЛИТИКА (УЛУЧШЕННАЯ) ---
     if choice == "📊 Аналитика":
-        st.header("📊 Общая аналитика")
-        d_range = st.date_input("Период", value=(default_start, today))
+        st.header("📊 Аналитический дашборд")
+        d_range = st.date_input("Выберите период", value=(default_start, today))
         st_d, en_d = (d_range[0], d_range[1]) if len(d_range) == 2 else (default_start, today)
         
         data = get_leads(None, st_d, en_d)
         if not data:
-            st.warning("Нет данных за выбранный период")
+            st.warning("Нет данных для отображения")
         else:
             df = pd.DataFrame(data)
+            # Конвертируем дату для графиков
+            df['created_at'] = pd.to_datetime(df['created_at'])
+            
+            # Верхние карточки
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Всего", len(df))
-            m2.metric("🔵 В работе", len(df[df['status_color'] == 'blue']))
+            m1.metric("📥 Всего лидов", len(df))
+            m2.metric("🔵 В обработке", len(df[df['status_color'] == 'blue']))
             m3.metric("🟡 Ожидание", len(df[df['status_color'] == 'yellow']))
-            m4.metric("🔴 Отказ", len(df[df['status_color'] == 'red']))
+            m4.metric("🔴 Отказы", len(df[df['status_color'] == 'red']))
             
-            st.divider()
-            cl, cr = st.columns(2)
+            st.write("---")
             
-            fig_status = px.pie(df, names='status_color', title="Статусы лидов",
-                                color='status_color',
-                                color_discrete_map={'blue':'#B3D7FF','yellow':'#FFF59D','red':'#FFAB91','white':'#F0F2F6'})
-            cl.plotly_chart(fig_status, use_container_width=True)
+            col_l, col_r = st.columns(2)
             
-            df['day'] = pd.to_datetime(df['created_at']).dt.date
-            df_counts = df.groupby('day').size().reset_index(name='counts')
-            fig_date = px.line(df_counts, x='day', y='counts', title="Динамика поступления", markers=True)
-            cr.plotly_chart(fig_date, use_container_width=True)
+            # График 1: Горизонтальный Bar Chart (лучше читается на светлом)
+            status_counts = df['status_color'].value_counts().reset_index()
+            status_counts.columns = ['Статус', 'Количество']
+            
+            fig_bar = px.bar(status_counts, x='Количество', y='Статус', orientation='h',
+                             title="Распределение по статусам",
+                             color='Статус',
+                             color_discrete_map={'blue':'#B3D7FF','yellow':'#FFF59D','red':'#FFAB91','white':'#E0E0E0'},
+                             template="plotly_white") # Принудительно светлая тема для графика
+            col_l.plotly_chart(fig_bar, use_container_width=True)
+            
+            # График 2: Динамика (Area Chart для наглядности объема)
+            df['Дата'] = df['created_at'].dt.date
+            daily_data = df.groupby('Дата').size().reset_index(name='Лидов')
+            fig_area = px.area(daily_data, x='Дата', y='Лидов', title="Динамика поступления",
+                               template="plotly_white", line_shape='spline')
+            fig_area.update_traces(line_color='#1f77b4')
+            col_r.plotly_chart(fig_area, use_container_width=True)
 
     # --- СПИСОК ЛИДОВ ---
     elif choice == "👥 Список лидов":
         st.header("👥 База лидов")
-        
         with st.expander("🔍 Поиск и Фильтрация", expanded=True):
             f1, f2 = st.columns([2, 2])
             search = f1.text_input("Поиск по ФИО или номеру", "")
@@ -79,11 +85,10 @@ def main():
         st_d, en_d = (d_range[0], d_range[1]) if len(d_range) == 2 else (None, None)
         all_leads = get_leads(search if search else None, st_d, en_d)
         
-        st.info(f"Найдено: **{len(all_leads)}**")
+        st.info(f"Найдено записей: **{len(all_leads)}**")
 
         items_per_page = 50
         num_pages = max(1, (len(all_leads) // items_per_page) + (1 if len(all_leads) % items_per_page > 0 else 0))
-        
         if 'page' not in st.session_state: st.session_state.page = 1
         n1, _, n3 = st.columns([1, 2, 1])
         if n1.button("⏮ В начало"): st.session_state.page = 1
@@ -96,8 +101,6 @@ def main():
         for i, row in enumerate(current_leads):
             color = get_status_color(row['status_color'])
             date_s = row['created_at'].strftime("%d.%m.%Y %H:%M")
-            
-            # Фикс для светлой темы: принудительный черный текст и контрастная рамка
             st.markdown(f"""
                 <div style="background-color:{color}; border-radius:10px; padding:12px; margin-bottom:10px; border:2px solid #444; color: #000000 !important;">
                     <b style="color: #000000 !important; font-size: 14px;">
@@ -122,7 +125,6 @@ def main():
                 curr_s = c5.selectbox("Статус", ["white", "blue", "yellow", "red"], 
                                      index=["white", "blue", "yellow", "red"].index(row['status_color']), key=f"s_{row['id']}")
                 curr_src = c6.text_input("Источник", row['source'], key=f"src_{row['id']}")
-                
                 curr_comm = st.text_area("Комментарии", row['comment'] if row['comment'] else "", key=f"cm_{row['id']}")
                 
                 bs, bd = st.columns([1, 5])
@@ -144,15 +146,42 @@ def main():
                     add_lead(f_n, f_p, f_e, f_c, "Manual", f_cm); st.success("Запись создана!")
                 else: st.error("Имя и Телефон — обязательны")
 
-    # --- БАЗА ДАННЫХ ---
+    # --- БАЗА ДАННЫХ + EXCEL EXPORT ---
     elif choice == "📂 База данных":
-        st.header("📂 Импорт и очистка")
-        if st.session_state.get("role") == "superadmin" and st.button("🔥 ПОЛНАЯ ОЧИСТКА БАЗЫ"):
-            clear_all_leads(); st.rerun()
+        st.header("📂 Управление данными")
         
+        col_ex1, col_ex2 = st.columns(2)
+        
+        # Кнопка экспорта
+        with col_ex1:
+            st.subheader("📥 Экспорт")
+            all_leads_for_export = get_leads() # Выгружаем всё
+            if all_leads_for_export:
+                df_export = pd.DataFrame(all_leads_for_export)
+                # Убираем лишние колонки для Excel
+                if 'id' in df_export.columns: df_export = df_export.drop(columns=['id'])
+                
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                    df_export.to_excel(writer, index=False, sheet_name='Leads')
+                
+                st.download_button(
+                    label="📥 Скачать всю базу в Excel",
+                    data=buffer.getvalue(),
+                    file_name=f"leads_export_{date.today()}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+        
+        with col_ex2:
+            st.subheader("🔥 Очистка")
+            if st.session_state.get("role") == "superadmin":
+                if st.button("🔥 УДАЛИТЬ ВСЕ ДАННЫЕ"):
+                    clear_all_leads(); st.rerun()
+
         st.divider()
+        st.subheader("🚀 Импорт новых данных")
         up = st.file_uploader("Загрузить XLSX", type=["xlsx"])
-        if up and st.button("🚀 Начать загрузку"):
+        if up and st.button("Начать загрузку"):
             df_up = pd.read_excel(up, header=None)
             for _, r in df_up.iterrows():
                 v = list(r.values)
@@ -163,11 +192,9 @@ def main():
     # --- АДМИНИСТРИРОВАНИЕ ---
     elif choice == "🔑 Администрирование" and st.session_state.get("role") == "superadmin":
         st.header("🔑 Управление доступом")
-        new_m = st.text_input("Email нового администратора:")
+        new_m = st.text_input("Email администратора:")
         if st.button("Добавить"):
             if new_m: add_allowed_email(new_m); st.rerun()
-        
-        st.divider()
         for e in get_allowed_emails():
             c1, c2 = st.columns([4, 1])
             c1.write(f"• {e}")
