@@ -39,6 +39,8 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """)
+        # Ускоряем выборку: создаем индексы, если их нет
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_id ON leads (id DESC);")
         conn.commit()
     finally:
         conn.close()
@@ -56,12 +58,14 @@ def add_lead(full_name, phone, email='', course_name='', source='', comment='', 
     finally:
         conn.close()
 
+# Оптимизированное получение данных
 def get_leads():
     conn = get_connection()
     if not conn: return []
     try:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM leads ORDER BY id DESC")
+        # Выбираем только то, что нужно, и в правильном порядке
+        cur.execute("SELECT id, full_name, phone, email, course_name, source, comment, status_color FROM leads ORDER BY id DESC")
         colnames = [desc[0] for desc in cur.description]
         return [dict(zip(colnames, row)) for row in cur.fetchall()]
     finally:
