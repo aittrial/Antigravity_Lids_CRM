@@ -27,6 +27,8 @@ def init_db():
     try:
         cur = conn.cursor()
         cur.execute("CREATE TABLE IF NOT EXISTS allowed_emails (email VARCHAR(255) PRIMARY KEY);")
+        # Таблица для системных настроек (храним дату архивации)
+        cur.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);")
         cur.execute("""
         CREATE TABLE IF NOT EXISTS leads (
             id SERIAL PRIMARY KEY,
@@ -41,7 +43,32 @@ def init_db():
         );
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_id_desc ON leads (id DESC);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads (created_at);")
         conn.commit()
+    finally:
+        conn.close()
+
+def set_archive_threshold():
+    """Устанавливает текущее время как точку отсчета для архива"""
+    conn = get_connection()
+    if not conn: return
+    try:
+        cur = conn.cursor()
+        now = datetime.now().isoformat()
+        cur.execute("INSERT INTO settings (key, value) VALUES ('archive_date', %s) ON CONFLICT (key) DO UPDATE SET value = %s", (now, now))
+        conn.commit()
+    finally:
+        conn.close()
+
+def get_archive_threshold():
+    """Получает дату последней ручной архивации"""
+    conn = get_connection()
+    if not conn: return None
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT value FROM settings WHERE key = 'archive_date'")
+        res = cur.fetchone()
+        return res[0] if res else None
     finally:
         conn.close()
 
@@ -59,14 +86,31 @@ def add_lead(full_name, phone, email='', course_name='', source='', comment='', 
     finally:
         conn.close()
 
-def get_leads(search_query=None, start_date=None, end_date=None, limit_50=False, offset_50=False):
+def get_leads(search_query=None, start_date=None, end_date=None, mode="active"):
     conn = get_connection()
     if not conn: return []
     try:
         cur = conn.cursor()
+        threshold = get_archive_threshold()
         query = "SELECT * FROM leads WHERE 1=1"
         params = []
         
+        # Логика разделения Активные / Архив
+        if mode == "active":
+            if threshold:
+                query += " AND created_at > %s"
+                params.append(threshold)
+            limit_sql = " LIMIT 50" # Всегда только 50 последних на главной
+        else: # Архив
+            if threshold:
+                # В архиве всё, что было ДО кнопки ИЛИ всё, что за пределами ТОП-50 (если кнопки не было)
+                query += " AND (created_at <= %s OR id NOT IN (SELECT id FROM leads WHERE created_at > %s ORDER BY id DESC LIMIT 50))"
+                params.extend([threshold, threshold])
+            else:
+                # Если ручного сброса не было, просто прячем первые 50
+                query += " AND id NOT IN (SELECT id FROM leads ORDER BY id DESC LIMIT 50)"
+            limit_sql = ""
+
         if search_query:
             query += " AND (full_name ILIKE %s OR phone ILIKE %s)"
             params.extend([f"%{search_query}%", f"%{search_query}%"])
@@ -77,13 +121,8 @@ def get_leads(search_query=None, start_date=None, end_date=None, limit_50=False,
             query += " AND created_at <= %s"
             params.append(datetime.combine(end_date, datetime.max.time()))
 
-        query += " ORDER BY id DESC"
+        query += " ORDER BY id DESC" + limit_sql
         
-        if limit_50:
-            query += " LIMIT 50"
-        elif offset_50:
-            query += " OFFSET 50"
-
         cur.execute(query, params)
         colnames = [desc[0] for desc in cur.description]
         return [dict(zip(colnames, row)) for row in cur.fetchall()]
@@ -118,6 +157,7 @@ def clear_all_leads():
     try:
         cur = conn.cursor()
         cur.execute("TRUNCATE TABLE leads RESTART IDENTITY")
+        cur.execute("DELETE FROM settings WHERE key = 'archive_date'")
         conn.commit()
     finally:
         conn.close()
