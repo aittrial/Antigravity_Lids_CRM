@@ -1,23 +1,24 @@
 import os
 import psycopg2
+import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv()
 
 def get_connection():
     try:
-        # Прямое подключение без пула для 100% надежности на Railway
+        # Railway требует sslmode='require' для внешних подключений
         conn = psycopg2.connect(
             host=os.getenv("DB_HOST"),
             port=os.getenv("DB_PORT"),
             database=os.getenv("DB_NAME"),
             user=os.getenv("DB_USER"),
             password=os.getenv("DB_PASSWORD"),
-            sslmode='require'
+            sslmode='require' if os.getenv("DB_HOST") != "localhost" else 'disable'
         )
         return conn
     except Exception as e:
-        print(f"DATABASE CONNECTION ERROR: {e}")
+        st.error(f"❌ ОШИБКА ПОДКЛЮЧЕНИЯ К БАЗЕ: {e}")
         return None
 
 def init_db():
@@ -41,6 +42,8 @@ def init_db():
         );
         """)
         conn.commit()
+    except Exception as e:
+        st.error(f"❌ ОШИБКА ПРИ СОЗДАНИИ ТАБЛИЦ: {e}")
     finally:
         conn.close()
 
@@ -54,8 +57,10 @@ def add_lead(full_name, phone, email='', course_name='', source='', callback_tim
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (str(full_name), str(phone), str(email), str(course_name), str(source), str(callback_time), str(comment), str(status_color)))
         conn.commit()
+        return True
     except Exception as e:
-        print(f"INSERT ERROR: {e}")
+        st.error(f"❌ ОШИБКА ЗАПИСИ В БАЗУ: {e}")
+        return False
     finally:
         conn.close()
 
@@ -67,6 +72,9 @@ def get_leads():
         cur.execute("SELECT * FROM leads ORDER BY id DESC")
         colnames = [desc[0] for desc in cur.description]
         return [dict(zip(colnames, row)) for row in cur.fetchall()]
+    except Exception as e:
+        st.error(f"❌ ОШИБКА ЧТЕНИЯ ИЗ БАЗЫ: {e}")
+        return []
     finally:
         conn.close()
 

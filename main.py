@@ -4,7 +4,9 @@ import os
 from database import init_db, get_leads, add_lead, update_lead, delete_lead, get_allowed_emails, add_allowed_email, delete_allowed_email
 from auth import check_password, logout
 
-st.set_page_config(page_title="Lids_CRM ANTIGRAVITY v2.5", layout="wide")
+st.set_page_config(page_title="Lids_CRM FINAL DIAGNOSTIC", layout="wide")
+
+# Принудительная инициализация при каждом запуске
 init_db()
 
 def get_status_color(status):
@@ -24,7 +26,7 @@ def main():
     if choice == "Лиды":
         st.subheader("📋 Список лидов")
         leads = get_leads()
-        st.write(f"Всего записей найдено в базе: **{len(leads)}**")
+        st.write(f"Записей в базе найдено: **{len(leads)}**")
         
         if not leads:
             st.info("В базе данных пока нет лидов.")
@@ -44,22 +46,28 @@ def main():
                     st.markdown('</div>', unsafe_allow_html=True)
 
     elif choice == "Добавить лид":
-        st.subheader("➕ Ручное добавление")
+        st.subheader("➕ Ручное добавление (ТЕСТ СВЯЗИ)")
         with st.form("manual_form"):
-            n, p, e, c = st.text_input("Имя"), st.text_input("Телефон"), st.text_input("Email"), st.text_input("Курс")
-            if st.form_submit_button("Добавить"):
-                add_lead(n, p, e, c, "Manual")
-                st.success("Лид успешно добавлен в базу!")
-                st.rerun()
+            n = st.text_input("Имя")
+            p = st.text_input("Телефон")
+            e = st.text_input("Email")
+            c = st.text_input("Курс")
+            if st.form_submit_button("СОХРАНИТЬ В БАЗУ"):
+                if n or p:
+                    success = add_lead(n, p, e, c, "Manual Test")
+                    if success:
+                        st.success("✅ Лид добавлен! Проверьте вкладку 'Лиды'")
+                else:
+                    st.error("Заполните имя или телефон")
 
     elif choice == "Импорт/Экспорт":
         st.subheader("📂 Импорт из Excel")
-        up_file = st.file_uploader("Загрузите Excel файл", type=["xlsx"])
+        up_file = st.file_uploader("Загрузите файл", type=["xlsx"])
         if up_file:
             xl = pd.ExcelFile(up_file)
             sheet = 'Test' if 'Test' in xl.sheet_names else xl.sheet_names[0]
             df = pd.read_excel(up_file, sheet_name=sheet, header=None)
-            st.write(f"Читаем лист: {sheet}")
+            st.write(f"Лист: {sheet}")
             st.dataframe(df.head(5))
             
             if st.button("🚀 НАЧАТЬ ИМПОРТ"):
@@ -68,27 +76,19 @@ def main():
                     v = list(row.values)
                     if len(v) < 3: continue
                     
-                    # Колонки B(1) и C(2)
                     name = str(v[1]).strip() if pd.notna(v[1]) else ""
                     phone = str(v[2]).strip() if pd.notna(v[2]) else ""
                     
                     if name.lower() in ['nan', 'name', 'имя', ''] or phone.lower() in ['nan', 'phone', '']:
                         continue
                     
-                    add_lead(
-                        full_name=name,
-                        phone=phone,
-                        email=str(v[3]) if len(v) > 3 and pd.notna(v[3]) else '',
-                        course_name=str(v[4]) if len(v) > 4 and pd.notna(v[4]) else '',
-                        source=f"Excel {sheet}",
-                        comment=str(v[6]) if len(v) > 6 and pd.notna(v[6]) else ''
-                    )
-                    count += 1
+                    if add_lead(name, phone, source=f"Excel {sheet}"):
+                        count += 1
                 
                 if count > 0:
-                    st.success(f"✅ Успешно импортировано и СОХРАНЕНО: {count}")
+                    st.success(f"✅ Успешно импортировано: {count}")
                     st.rerun()
                 else:
-                    st.error("Данные не найдены. Проверьте содержимое файла.")
+                    st.error("❌ Данные не найдены или ошибка в файле.")
 
 if __name__ == "__main__": main()
