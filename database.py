@@ -17,7 +17,7 @@ def get_connection():
         )
         return conn
     except Exception as e:
-        st.error(f"❌ Ошибка подключения: {e}")
+        st.error(f"❌ Ошибка базы: {e}")
         return None
 
 def init_db():
@@ -39,8 +39,8 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """)
-        # Ускоряем выборку: создаем индексы, если их нет
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_id ON leads (id DESC);")
+        # Индексы для скорости
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_id_desc ON leads (id DESC);")
         conn.commit()
     finally:
         conn.close()
@@ -58,14 +58,17 @@ def add_lead(full_name, phone, email='', course_name='', source='', comment='', 
     finally:
         conn.close()
 
-# Оптимизированное получение данных
-def get_leads():
+def get_leads(search_query=None):
     conn = get_connection()
     if not conn: return []
     try:
         cur = conn.cursor()
-        # Выбираем только то, что нужно, и в правильном порядке
-        cur.execute("SELECT id, full_name, phone, email, course_name, source, comment, status_color FROM leads ORDER BY id DESC")
+        if search_query:
+            query = "SELECT * FROM leads WHERE full_name ILIKE %s OR phone ILIKE %s ORDER BY id DESC"
+            cur.execute(query, (f"%{search_query}%", f"%{search_query}%"))
+        else:
+            cur.execute("SELECT * FROM leads ORDER BY id DESC")
+        
         colnames = [desc[0] for desc in cur.description]
         return [dict(zip(colnames, row)) for row in cur.fetchall()]
     finally:
