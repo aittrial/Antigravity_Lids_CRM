@@ -24,9 +24,10 @@ def main():
     if choice == "Лиды":
         st.subheader("📋 Список лидов")
         leads = get_leads()
-        st.write(f"Всего записей в базе: {len(leads)}")
+        st.write(f"Всего записей найдено в базе: **{len(leads)}**")
+        
         if not leads:
-            st.info("Лидов пока нет.")
+            st.info("В базе данных пока нет лидов.")
         else:
             df = pd.DataFrame(leads)
             for index, row in df.iterrows():
@@ -43,24 +44,23 @@ def main():
                     st.markdown('</div>', unsafe_allow_html=True)
 
     elif choice == "Добавить лид":
-        st.subheader("➕ Новый лид")
-        with st.form("manual_add"):
+        st.subheader("➕ Ручное добавление")
+        with st.form("manual_form"):
             n, p, e, c = st.text_input("Имя"), st.text_input("Телефон"), st.text_input("Email"), st.text_input("Курс")
             if st.form_submit_button("Добавить"):
                 add_lead(n, p, e, c, "Manual")
-                st.success("Добавлен!")
+                st.success("Лид успешно добавлен в базу!")
                 st.rerun()
 
     elif choice == "Импорт/Экспорт":
         st.subheader("📂 Импорт из Excel")
-        up_file = st.file_uploader("Загрузите файл", type=["xlsx"])
+        up_file = st.file_uploader("Загрузите Excel файл", type=["xlsx"])
         if up_file:
             xl = pd.ExcelFile(up_file)
             sheet = 'Test' if 'Test' in xl.sheet_names else xl.sheet_names[0]
-            # Читаем без заголовков, чтобы видеть всё
             df = pd.read_excel(up_file, sheet_name=sheet, header=None)
-            st.write(f"Лист: {sheet}")
-            st.dataframe(df.head(10))
+            st.write(f"Читаем лист: {sheet}")
+            st.dataframe(df.head(5))
             
             if st.button("🚀 НАЧАТЬ ИМПОРТ"):
                 count = 0
@@ -68,31 +68,27 @@ def main():
                     v = list(row.values)
                     if len(v) < 3: continue
                     
-                    # Берем колонки B (индекс 1) и C (индекс 2)
+                    # Колонки B(1) и C(2)
                     name = str(v[1]).strip() if pd.notna(v[1]) else ""
                     phone = str(v[2]).strip() if pd.notna(v[2]) else ""
                     
-                    # Пропуск заголовков
                     if name.lower() in ['nan', 'name', 'имя', ''] or phone.lower() in ['nan', 'phone', '']:
                         continue
                     
-                    try:
-                        add_lead(
-                            full_name=name,
-                            phone=phone,
-                            email=str(v[3]) if len(v) > 3 and pd.notna(v[3]) else '',
-                            course_name=str(v[4]) if len(v) > 4 and pd.notna(v[4]) else '',
-                            source=f"Import {sheet}",
-                            comment=str(v[6]) if len(v) > 6 and pd.notna(v[6]) else ''
-                        )
-                        count += 1
-                    except:
-                        continue
+                    add_lead(
+                        full_name=name,
+                        phone=phone,
+                        email=str(v[3]) if len(v) > 3 and pd.notna(v[3]) else '',
+                        course_name=str(v[4]) if len(v) > 4 and pd.notna(v[4]) else '',
+                        source=f"Excel {sheet}",
+                        comment=str(v[6]) if len(v) > 6 and pd.notna(v[6]) else ''
+                    )
+                    count += 1
                 
                 if count > 0:
-                    st.success(f"✅ Успешно! Добавлено лидов: {count}")
+                    st.success(f"✅ Успешно импортировано и СОХРАНЕНО: {count}")
                     st.rerun()
                 else:
-                    st.error("❌ Данные не найдены. Проверьте колонки B и C в Excel.")
+                    st.error("Данные не найдены. Проверьте содержимое файла.")
 
 if __name__ == "__main__": main()

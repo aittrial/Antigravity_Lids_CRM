@@ -6,15 +6,16 @@ load_dotenv()
 
 def get_connection():
     try:
-        # Прямое подключение для стабильности на Railway
-        return psycopg2.connect(
-            host=os.getenv("DB_HOST", "localhost"),
-            port=os.getenv("DB_PORT", "5432"),
-            database=os.getenv("DB_NAME", "lids_db"),
-            user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "yourpassword"),
-            sslmode='require' if os.getenv("DB_HOST") != "localhost" else 'disable'
+        # Прямое подключение без пула для 100% надежности на Railway
+        conn = psycopg2.connect(
+            host=os.getenv("DB_HOST"),
+            port=os.getenv("DB_PORT"),
+            database=os.getenv("DB_NAME"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            sslmode='require'
         )
+        return conn
     except Exception as e:
         print(f"DATABASE CONNECTION ERROR: {e}")
         return None
@@ -53,6 +54,8 @@ def add_lead(full_name, phone, email='', course_name='', source='', callback_tim
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (str(full_name), str(phone), str(email), str(course_name), str(source), str(callback_time), str(comment), str(status_color)))
         conn.commit()
+    except Exception as e:
+        print(f"INSERT ERROR: {e}")
     finally:
         conn.close()
 
@@ -114,7 +117,7 @@ def delete_allowed_email(email):
     if not conn: return
     try:
         cur = conn.cursor()
-        cur.execute("DELETE FROM leads WHERE email = %s", (email,)) # Фикс: удаление из нужной таблицы
+        cur.execute("DELETE FROM allowed_emails WHERE email = %s", (email,))
         conn.commit()
     finally:
         conn.close()
