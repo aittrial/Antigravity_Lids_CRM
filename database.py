@@ -34,7 +34,6 @@ def init_db():
             email TEXT,
             course_name TEXT,
             source TEXT,
-            callback_time TEXT,
             comment TEXT,
             status_color VARCHAR(50) DEFAULT 'white',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

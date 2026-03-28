@@ -5,12 +5,17 @@ from database import (init_db, get_leads, add_lead, update_lead, delete_lead,
                       clear_all_leads, get_allowed_emails, add_allowed_email, delete_allowed_email)
 from auth import check_password, logout
 
-st.set_page_config(page_title="Lids_CRM v3.6 PRO", layout="wide")
+st.set_page_config(page_title="Lids_CRM v3.7 PRO", layout="wide")
 init_db()
 
 def get_status_color(status):
-    colors = {"blue": "#ADD8E6", "yellow": "#FFFFE0", "red": "#FFB6C1", "white": "#F0F2F6"}
-    return colors.get(status, "#F0F2F6")
+    colors = {
+        "blue": "#E3F2FD", 
+        "yellow": "#FFFDE7", 
+        "red": "#FFEBEE", 
+        "white": "#FFFFFF"
+    }
+    return colors.get(status, "#FFFFFF")
 
 def main():
     if not check_password(): return
@@ -29,23 +34,14 @@ def main():
         st.subheader("📋 Список лидов")
         leads = get_leads()
         
-        # Стилизация экспандеров через CSS
         for row in leads:
             color = get_status_color(row['status_color'])
-            # Уникальный стиль для каждого лида
-            st.markdown(f"""
-                <style>
-                div[data-indexed-key="expander-{row['id']}"] {{
-                    background-color: {color};
-                    border-radius: 10px;
-                    margin-bottom: 10px;
-                }}
-                </style>
-            """, unsafe_allow_html=True)
             
-            with st.expander(f"👤 {row['full_name']} | 📞 {row['phone']} | 📚 {row['course_name']}", expanded=False):
-                st.container()
-                st.markdown(f'<div style="background-color:{color}; padding:15px; border-radius:10px; color:black;">', unsafe_allow_html=True)
+            with st.expander(f"👤 {row['full_name']} | 📞 {row['phone']} | 📚 {row['course_name']}"):
+                # Окрашивание внутреннего контента карточки
+                st.markdown(f"""
+                    <div style="background-color:{color}; padding:20px; border-radius:10px; border:1px solid #ddd; color:black;">
+                """, unsafe_allow_html=True)
                 
                 c1, c2, c3 = st.columns(3)
                 n = c1.text_input("Имя", row['full_name'], key=f"n_{row['id']}")
@@ -54,11 +50,11 @@ def main():
                 
                 c4, c5, c6 = st.columns(3)
                 curr_c = c4.text_input("Курс", row['course_name'], key=f"c_{row['id']}")
-                curr_s = c5.selectbox("Цвет статуса", ["white", "blue", "yellow", "red"], 
+                curr_s = c5.selectbox("Цвет (статус)", ["white", "blue", "yellow", "red"], 
                                      index=["white", "blue", "yellow", "red"].index(row['status_color']), key=f"s_{row['id']}")
                 curr_src = c6.text_input("Источник", row['source'], key=f"src_{row['id']}")
                 
-                curr_comm = st.text_area("Комментарий", row['comment'], key=f"cm_{row['id']}")
+                curr_comm = st.text_area("Комментарий", row['comment'] if row['comment'] else "", key=f"cm_{row['id']}")
                 
                 b1, b2 = st.columns([1, 5])
                 if b1.button("💾 Сохранить", key=f"sv_{row['id']}"):
@@ -69,7 +65,8 @@ def main():
                 if st.session_state.get("role") == "superadmin":
                     if b2.button("🗑️ Удалить", key=f"del_{row['id']}"):
                         delete_lead(row['id']); st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
+                
+                st.markdown("</div>", unsafe_allow_html=True)
 
     elif choice == "Добавить лид":
         st.subheader("➕ Новый лид")
@@ -77,7 +74,8 @@ def main():
             n, p, e, c = st.text_input("Имя"), st.text_input("Телефон"), st.text_input("Email"), st.text_input("Курс")
             comm = st.text_area("Комментарий")
             if st.form_submit_button("Добавить"):
-                add_lead(n, p, e, c, "Manual", comment=comm); st.success("Добавлен!"); st.rerun()
+                add_lead(n, p, e, c, "Manual", comment=comm)
+                st.success("Добавлен!"); st.rerun()
 
     elif choice == "Импорт/Экспорт":
         st.subheader("📂 Инструменты")
@@ -99,7 +97,7 @@ def main():
                 st.rerun()
 
     elif choice == "Управление доступом" and st.session_state.get("role") == "superadmin":
-        st.subheader("🔑 Доступ")
+        st.subheader("🔑 Управление админами")
         new_mail = st.text_input("Email:")
         if st.button("Добавить"):
             add_allowed_email(new_mail); st.rerun()
