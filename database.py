@@ -7,7 +7,6 @@ load_dotenv()
 
 def get_connection():
     try:
-        # Используем те самые переменные, которые ты настроил
         conn = psycopg2.connect(
             host=os.getenv("DB_HOST"),
             port=os.getenv("DB_PORT"),
@@ -18,7 +17,7 @@ def get_connection():
         )
         return conn
     except Exception as e:
-        st.error(f"❌ Ошибка базы: {e}")
+        st.error(f"❌ Ошибка подключения: {e}")
         return None
 
 def init_db():
@@ -87,6 +86,16 @@ def delete_lead(lead_id):
     try:
         cur = conn.cursor()
         cur.execute("DELETE FROM leads WHERE id = %s", (lead_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+def clear_all_leads():
+    conn = get_connection()
+    if not conn: return
+    try:
+        cur = conn.cursor()
+        cur.execute("TRUNCATE TABLE leads RESTART IDENTITY")
         conn.commit()
     finally:
         conn.close()
