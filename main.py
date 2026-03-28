@@ -18,7 +18,7 @@ def get_status_color(status):
 
 def render_leads_list(leads_data, start_order=1):
     if not leads_data:
-        st.info("В этом разделе пока пусто.")
+        st.info("Нет данных для отображения.")
         return
 
     for i, row in enumerate(leads_data):
@@ -27,16 +27,16 @@ def render_leads_list(leads_data, start_order=1):
         st.markdown(f"""
             <div style="background-color:{color}; border-radius:10px; padding:12px; margin-bottom:10px; border:2px solid #444; color: #000000 !important;">
                 <b style="color: #000000 !important; font-size: 14px;">
-                    #{start_order+i} | 📅 {date_s} | {row['full_name']} | 📞 {row['phone']}
+                    #{start_order+i} | 📅 {date_s} | {row['full_name']} | {row['phone']}
                 </b>
             </div>
         """, unsafe_allow_html=True)
         
-        with st.expander("Управление"):
+        with st.expander("Управление лидом"):
             phone_num = ''.join(filter(str.isdigit, str(row['phone'])))
             st.markdown(f'''<a href="https://wa.me/{phone_num}" target="_blank">
                 <button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; width:100%;">
-                💬 Написать в WhatsApp</button></a>''', unsafe_allow_html=True)
+                💬 WhatsApp</button></a>''', unsafe_allow_html=True)
             
             c1, c2, c3 = st.columns(3)
             n = c1.text_input("ФИО", row['full_name'], key=f"n_{row['id']}")
@@ -75,61 +75,58 @@ def main():
     # --- АНАЛИТИКА ---
     if choice == "📊 Аналитика":
         st.header("📊 Аналитический дашборд")
-        d_range = st.date_input("Выберите период", value=(default_start, today))
+        d_range = st.date_input("Период", value=(default_start, today))
         st_d, en_d = (d_range[0], d_range[1]) if len(d_range) == 2 else (default_start, today)
         data = get_leads(None, st_d, en_d)
         if data:
             df = pd.DataFrame(data)
             df['created_at'] = pd.to_datetime(df['created_at'])
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("📥 Всего лидов", len(df))
-            m2.metric("🔵 В обработке", len(df[df['status_color'] == 'blue']))
-            m3.metric("🟡 Ожидание", len(df[df['status_color'] == 'yellow']))
-            m4.metric("🔴 Отказы", len(df[df['status_color'] == 'red']))
-            st.write("---")
-            col_l, col_r = st.columns(2)
-            status_counts = df['status_color'].value_counts().reset_index()
-            status_counts.columns = ['Статус', 'Количество']
-            fig_bar = px.bar(status_counts, x='Количество', y='Статус', orientation='h', title="Статусы",
-                             color='Статус', color_discrete_map={'blue':'#B3D7FF','yellow':'#FFF59D','red':'#FFAB91','white':'#E0E0E0'},
-                             template="plotly_white")
-            col_l.plotly_chart(fig_bar, use_container_width=True)
+            m1.metric("Всего", len(df)); m2.metric("🔵 В работе", len(df[df['status_color'] == 'blue']))
+            m3.metric("🟡 Ожидание", len(df[df['status_color'] == 'yellow'])); m4.metric("🔴 Отказы", len(df[df['status_color'] == 'red']))
+            st.divider()
+            cl, cr = st.columns(2)
+            st_counts = df['status_color'].value_counts().reset_index()
+            st_counts.columns = ['Статус', 'Количество']
+            fig_bar = px.bar(st_counts, x='Количество', y='Статус', orientation='h', title="Статусы", template="plotly_white",
+                             color='Статус', color_discrete_map={'blue':'#B3D7FF','yellow':'#FFF59D','red':'#FFAB91','white':'#E0E0E0'})
+            cl.plotly_chart(fig_bar, use_container_width=True)
             df['Дата'] = df['created_at'].dt.date
-            daily_data = df.groupby('Дата').size().reset_index(name='Лидов')
-            fig_area = px.area(daily_data, x='Дата', y='Лидов', title="Динамика", template="plotly_white")
-            col_r.plotly_chart(fig_area, use_container_width=True)
+            daily = df.groupby('Дата').size().reset_index(name='Лидов')
+            fig_area = px.area(daily, x='Дата', y='Лидов', title="Динамика", template="plotly_white")
+            cr.plotly_chart(fig_area, use_container_width=True)
 
-    # --- СПИСОК ЛИДОВ (С АРХИВОМ) ---
+    # --- СПИСОК ЛИДОВ (ПОИСК ВВЕРХУ + ЛИМИТ 50) ---
     elif choice == "👥 Список лидов":
-        st.header("👥 База лидов")
+        st.header("👥 Работа с лидами")
         
-        # Вкладки для разделения
-        tab_active, tab_archive = st.tabs(["🔥 Последние 150 (Активные)", "📦 Архив (Все остальные)"])
-        
-        with st.expander("🔍 Поиск и Фильтрация (для всех разделов)"):
+        # ПОИСК ТЕПЕРЬ В САМОМ ВЕРХУ
+        with st.container():
+            st.markdown("### 🔍 Быстрый поиск")
             f1, f2 = st.columns([2, 2])
-            search = f1.text_input("Поиск по ФИО или номеру", "")
-            d_range = f2.date_input("Диапазон дат", value=(default_start, today))
+            search = f1.text_input("Введите ФИО или телефон", "", key="main_search")
+            d_range = f2.date_input("Диапазон дат", value=(default_start, today), key="main_date")
         
         st_d, en_d = (d_range[0], d_range[1]) if len(d_range) == 2 else (None, None)
+        st.divider()
 
+        tab_active, tab_archive = st.tabs(["🔥 Последние 50", "📦 Весь Архив"])
+        
         with tab_active:
-            leads_active = get_leads(search if search else None, st_d, en_d, limit_150=True)
-            st.info(f"Отображено последних записей: **{len(leads_active)}**")
+            leads_active = get_leads(search if search else None, st_d, en_d, limit_50=True)
+            st.info(f"Отображено свежих записей: **{len(leads_active)}**")
             render_leads_list(leads_active, start_order=1)
 
         with tab_archive:
-            leads_archive = get_leads(search if search else None, st_d, en_d, offset_150=True)
-            total_archive = len(leads_archive)
-            st.warning(f"В архиве найдено записей: **{total_archive}**")
+            leads_archive = get_leads(search if search else None, st_d, en_d, offset_50=True)
+            total_arch = len(leads_archive)
+            st.warning(f"В архиве: **{total_arch}** записей")
             
-            # Пагинация для архива
-            items_per_page = 50
-            num_pages = max(1, (total_archive // items_per_page) + (1 if total_archive % items_per_page > 0 else 0))
-            page = st.number_input("Страница архива", min_value=1, max_value=num_pages, key="arch_page")
-            
-            start_idx = (page - 1) * items_per_page
-            render_leads_list(leads_archive[start_idx : start_idx + items_per_page], start_order=151 + start_idx)
+            if total_arch > 0:
+                ipp = 50
+                num_p = max(1, (total_arch // ipp) + (1 if total_arch % ipp > 0 else 0))
+                page = st.number_input("Страница архива", min_value=1, max_value=num_p, key="arch_page")
+                render_leads_list(leads_archive[(page-1)*ipp : page*ipp], start_order=51 + (page-1)*ipp)
 
     # --- НОВЫЙ ЛИД ---
     elif choice == "➕ Новый лид":
@@ -145,21 +142,34 @@ def main():
     # --- БАЗА ДАННЫХ ---
     elif choice == "📂 База данных":
         st.header("📂 Управление данными")
-        col_ex1, col_ex2 = st.columns(2)
-        with col_ex1:
-            all_leads_for_export = get_leads()
-            if all_leads_for_export:
-                df_export = pd.DataFrame(all_leads_for_export)
-                if 'id' in df_export.columns: df_export = df_export.drop(columns=['id'])
-                buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                    df_export.to_excel(writer, index=False, sheet_name='Leads')
-                st.download_button(label="📥 Скачать всю базу в Excel", data=buffer.getvalue(),
-                                   file_name=f"leads_export_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        with col_ex2:
-            if st.session_state.get("role") == "superadmin" and st.button("🔥 УДАЛИТЬ ВСЕ ДАННЫЕ"):
-                clear_all_leads(); st.rerun()
+        
+        c_ex, c_arch, c_clr = st.columns(3)
+        
+        with c_ex:
+            st.subheader("📥 Экспорт")
+            all_l = get_leads()
+            if all_l:
+                df_ex = pd.DataFrame(all_l)
+                if 'id' in df_ex.columns: df_ex = df_ex.drop(columns=['id'])
+                buf = io.BytesIO()
+                with pd.ExcelWriter(buf, engine='xlsxwriter') as wr:
+                    df_ex.to_excel(wr, index=False, sheet_name='Leads')
+                st.download_button("📥 Скачать Excel", data=buf.getvalue(), file_name=f"export_{date.today()}.xlsx")
+        
+        with c_arch:
+            st.subheader("📦 Архивация")
+            st.write("Скрыть текущие лиды?")
+            if st.button("📦 Отправить всё в архив"):
+                st.info("В этой системе архивация происходит автоматически: всё, что не входит в ТОП-50, уже в архиве!")
+
+        with c_clr:
+            st.subheader("🔥 Очистка")
+            if st.session_state.get("role") == "superadmin":
+                if st.button("🔥 УДАЛИТЬ ВСЁ"):
+                    clear_all_leads(); st.rerun()
+
         st.divider()
+        st.subheader("🚀 Импорт")
         up = st.file_uploader("Загрузить XLSX", type=["xlsx"])
         if up and st.button("Начать загрузку"):
             df_up = pd.read_excel(up, header=None)
@@ -171,13 +181,12 @@ def main():
 
     # --- АДМИНИСТРИРОВАНИЕ ---
     elif choice == "🔑 Администрирование" and st.session_state.get("role") == "superadmin":
-        st.header("🔑 Управление доступом")
-        new_m = st.text_input("Email администратора:")
+        st.header("🔑 Доступы")
+        new_m = st.text_input("Email:")
         if st.button("Добавить"):
             if new_m: add_allowed_email(new_m); st.rerun()
         for e in get_allowed_emails():
-            c1, c2 = st.columns([4, 1])
-            c1.write(f"• {e}")
+            c1, c2 = st.columns([4, 1]); c1.write(f"• {e}")
             if c2.button("Удалить", key=e): delete_allowed_email(e); st.rerun()
 
 if __name__ == "__main__":

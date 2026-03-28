@@ -59,7 +59,7 @@ def add_lead(full_name, phone, email='', course_name='', source='', comment='', 
     finally:
         conn.close()
 
-def get_leads(search_query=None, start_date=None, end_date=None, limit_150=False, offset_150=False):
+def get_leads(search_query=None, start_date=None, end_date=None, limit_50=False, offset_50=False):
     conn = get_connection()
     if not conn: return []
     try:
@@ -79,10 +79,10 @@ def get_leads(search_query=None, start_date=None, end_date=None, limit_150=False
 
         query += " ORDER BY id DESC"
         
-        if limit_150:
-            query += " LIMIT 150"
-        elif offset_150:
-            query += " OFFSET 150"
+        if limit_50:
+            query += " LIMIT 50"
+        elif offset_50:
+            query += " OFFSET 50"
 
         cur.execute(query, params)
         colnames = [desc[0] for desc in cur.description]
