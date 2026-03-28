@@ -7,6 +7,7 @@ load_dotenv()
 
 def get_connection():
     try:
+        # Прямое подключение для Railway с поддержкой SSL
         conn = psycopg2.connect(
             host=os.getenv("DB_HOST"),
             port=os.getenv("DB_PORT"),
@@ -25,7 +26,9 @@ def init_db():
     if not conn: return
     try:
         cur = conn.cursor()
+        # Таблица для разрешенных Email
         cur.execute("CREATE TABLE IF NOT EXISTS allowed_emails (email VARCHAR(255) PRIMARY KEY);")
+        # Таблица лидов со всеми полями
         cur.execute("""
         CREATE TABLE IF NOT EXISTS leads (
             id SERIAL PRIMARY KEY,
@@ -96,6 +99,37 @@ def clear_all_leads():
     try:
         cur = conn.cursor()
         cur.execute("TRUNCATE TABLE leads RESTART IDENTITY")
+        conn.commit()
+    finally:
+        conn.close()
+
+# Функции для управления админами
+def get_allowed_emails():
+    conn = get_connection()
+    if not conn: return []
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT email FROM allowed_emails")
+        return [row[0] for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+def add_allowed_email(email):
+    conn = get_connection()
+    if not conn: return
+    try:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO allowed_emails (email) VALUES (%s) ON CONFLICT DO NOTHING", (email,))
+        conn.commit()
+    finally:
+        conn.close()
+
+def delete_allowed_email(email):
+    conn = get_connection()
+    if not conn: return
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM allowed_emails WHERE email = %s", (email,))
         conn.commit()
     finally:
         conn.close()
