@@ -67,7 +67,7 @@ def add_lead(full_name, phone, email='', course_name='', source='', callback_tim
             INSERT INTO leads (full_name, phone, email, course_name, source, callback_time, comment, status_color)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        """, (full_name, phone, email, course_name, source, callback_time, comment, status_color))
+        """, (str(full_name), str(phone), str(email), str(course_name), str(source), str(callback_time), str(comment), str(status_color)))
         lead_id = cur.fetchone()[0]
         conn.commit()
         return lead_id
@@ -79,7 +79,7 @@ def get_leads():
     if not conn: return []
     try:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM leads ORDER BY created_at DESC")
+        cur.execute("SELECT * FROM leads ORDER BY id DESC")
         colnames = [desc[0] for desc in cur.description]
         return [dict(zip(colnames, row)) for row in cur.fetchall()]
     finally:
