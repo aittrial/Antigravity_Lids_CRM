@@ -40,8 +40,9 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """)
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_id_desc ON leads (id DESC);")
+        # Индексы для быстрой фильтрации по датам и статусам
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads (created_at);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_status ON leads (status_color);")
         conn.commit()
     finally:
         conn.close()
@@ -69,23 +70,17 @@ def get_leads(search_query=None, start_date=None, end_date=None):
         cur = conn.cursor()
         query = "SELECT * FROM leads WHERE 1=1"
         params = []
-
         if search_query:
             query += " AND (full_name ILIKE %s OR phone ILIKE %s)"
             params.extend([f"%{search_query}%", f"%{search_query}%"])
-        
         if start_date:
             query += " AND created_at >= %s"
             params.append(start_date)
-        
         if end_date:
             query += " AND created_at <= %s"
-            # Добавляем конец дня (23:59:59) для корректного фильтра по конечной дате
             params.append(datetime.combine(end_date, datetime.max.time()))
-
         query += " ORDER BY id DESC"
         cur.execute(query, params)
-        
         colnames = [desc[0] for desc in cur.description]
         return [dict(zip(colnames, row)) for row in cur.fetchall()]
     finally:
