@@ -3,20 +3,17 @@ import psycopg2
 from psycopg2 import pool
 from dotenv import load_dotenv
 
-# Load .env file
 load_dotenv()
 
-# Database config
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "lids_db")
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "yourpassword")
 
-# Connection pool
 try:
     connection_pool = pool.SimpleConnectionPool(
-        1, 10,
+        1, 20,
         host=DB_HOST,
         port=DB_PORT,
         database=DB_NAME,
@@ -39,72 +36,29 @@ def release_connection(conn):
 
 def init_db():
     conn = get_connection()
-    if not conn:
-        return
+    if not conn: return
     try:
         cur = conn.cursor()
-        
-        # Create allowed_emails table
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS allowed_emails (
-            email VARCHAR(255) PRIMARY KEY
-        );
-        """)
-        
-        # Create leads table
+        cur.execute("CREATE TABLE IF NOT EXISTS allowed_emails (email VARCHAR(255) PRIMARY KEY);")
         cur.execute("""
         CREATE TABLE IF NOT EXISTS leads (
             id SERIAL PRIMARY KEY,
-            full_name VARCHAR(255),
-            phone VARCHAR(50) UNIQUE,
-            email VARCHAR(100),
-            course_name VARCHAR(100),
-            source VARCHAR(50),
-            callback_time TIMESTAMP,
+            full_name TEXT,
+            phone TEXT,
+            email TEXT,
+            course_name TEXT,
+            source TEXT,
+            callback_time TEXT,
             comment TEXT,
-            status_color VARCHAR(20) DEFAULT 'white',
+            status_color VARCHAR(50) DEFAULT 'white',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """)
-        
-        conn.commit()
-    except Exception as e:
-        print(f"Error initializing DB: {e}")
-    finally:
-        release_connection(conn)
-
-def add_allowed_email(email):
-    conn = get_connection()
-    if not conn: return
-    try:
-        cur = conn.cursor()
-        cur.execute("INSERT INTO allowed_emails (email) VALUES (%s) ON CONFLICT DO NOTHING", (email,))
         conn.commit()
     finally:
         release_connection(conn)
 
-def get_allowed_emails():
-    conn = get_connection()
-    if not conn: return []
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT email FROM allowed_emails")
-        return [row[0] for row in cur.fetchall()]
-    finally:
-        release_connection(conn)
-
-def delete_allowed_email(email):
-    conn = get_connection()
-    if not conn: return
-    try:
-        cur = conn.cursor()
-        cur.execute("DELETE FROM allowed_emails WHERE email = %s", (email,))
-        conn.commit()
-    finally:
-        release_connection(conn)
-
-# LEADS CRUD
-def add_lead(full_name, phone, email, course_name, source, callback_time=None, comment="", status_color="white"):
+def add_lead(full_name, phone, email='', course_name='', source='', callback_time='', comment='', status_color='white'):
     conn = get_connection()
     if not conn: return
     try:
@@ -126,7 +80,6 @@ def get_leads():
     try:
         cur = conn.cursor()
         cur.execute("SELECT * FROM leads ORDER BY created_at DESC")
-        # Get column names
         colnames = [desc[0] for desc in cur.description]
         return [dict(zip(colnames, row)) for row in cur.fetchall()]
     finally:
@@ -150,6 +103,36 @@ def delete_lead(lead_id):
     try:
         cur = conn.cursor()
         cur.execute("DELETE FROM leads WHERE id = %s", (lead_id,))
+        conn.commit()
+    finally:
+        release_connection(conn)
+
+def get_allowed_emails():
+    conn = get_connection()
+    if not conn: return []
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT email FROM allowed_emails")
+        return [row[0] for row in cur.fetchall()]
+    finally:
+        release_connection(conn)
+
+def add_allowed_email(email):
+    conn = get_connection()
+    if not conn: return
+    try:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO allowed_emails (email) VALUES (%s) ON CONFLICT DO NOTHING", (email,))
+        conn.commit()
+    finally:
+        release_connection(conn)
+
+def delete_allowed_email(email):
+    conn = get_connection()
+    if not conn: return
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM allowed_emails WHERE email = %s", (email,))
         conn.commit()
     finally:
         release_connection(conn)
