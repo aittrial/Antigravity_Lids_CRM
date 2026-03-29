@@ -42,7 +42,10 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """)
+        # Проверка и добавление новых колонок в существующую базу
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS preferred_time TEXT;")
+        cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS source TEXT;")
+        
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_id_desc ON leads (id DESC);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads (created_at);")
         conn.commit()
@@ -107,9 +110,7 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
                 query += " AND id NOT IN (SELECT id FROM leads ORDER BY id DESC LIMIT 50)"
             limit_sql = ""
 
-        # Фильтр по цвету (статусу)
         if status_filter and status_filter != "Все":
-            # Маппинг названий на английские ключи базы
             status_map = {"Белый": "white", "Синий": "blue", "Желтый": "yellow", "Красный": "red"}
             query += " AND status_color = %s"
             params.append(status_map.get(status_filter, "white"))

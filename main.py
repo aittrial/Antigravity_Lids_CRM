@@ -12,6 +12,10 @@ APP_TITLE = "📈 LeadFlow | Lead Management System"
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 init_db()
 
+# Константы для выпадающих списков
+SOURCE_OPTIONS = ["Meta", "Google Landing", "Google Quiz", "Google", "Google leadform", "chatgpt.com", "Other"]
+COURSE_OPTIONS = ["QA testing", "Programming", "QA testing AIT", "Programming AIT", "Accounting", "Free course", "Other"]
+
 def get_status_color(status):
     colors = {"blue": "#B3D7FF", "yellow": "#FFF59D", "red": "#FFAB91", "white": "#F0F2F6"}
     return colors.get(status, "#F0F2F6")
@@ -23,7 +27,7 @@ def render_leads_list(leads_data, start_order=1):
     for i, row in enumerate(leads_data):
         color = get_status_color(row['status_color'])
         date_s = row['created_at'].strftime("%d.%m.%Y %H:%M")
-        pref_time = row.get('preferred_time', 'Не указано')
+        pref_time = row.get('preferred_time', '---')
         
         st.markdown(f"""
             <div style="background-color:{color}; border-radius:10px; padding:12px; margin-bottom:10px; border:2px solid #444; color: #000000 !important;">
@@ -50,7 +54,7 @@ def render_leads_list(leads_data, start_order=1):
             curr_s = c6.selectbox("Статус", ["white", "blue", "yellow", "red"], index=["white", "blue", "yellow", "red"].index(row['status_color']), key=f"s_{row['id']}")
             
             c7, c8 = st.columns(2)
-            curr_src = c7.text_input("Источник", row['source'], key=f"src_{row['id']}")
+            curr_src = c7.text_input("Источник", row.get('source', ''), key=f"src_{row['id']}")
             curr_comm = c8.text_area("Комментарии", row['comment'] if row['comment'] else "", key=f"cm_{row['id']}", height=68)
             
             bs, bd = st.columns([1, 5])
@@ -74,7 +78,7 @@ def main():
     today = date.today()
     default_start = today - timedelta(days=30)
 
-    # --- АНАЛИТИКА ---
+    # --- РАЗДЕЛ АНАЛИТИКА ---
     if choice == "📊 Аналитика":
         st.header("📊 Аналитический дашборд")
         d_range = st.date_input("Период", value=(default_start, today))
@@ -97,11 +101,9 @@ def main():
             fig_area = px.area(daily, x='Дата', y='Лидов', title="Динамика поступления", template="plotly_white")
             cr.plotly_chart(fig_area, use_container_width=True)
 
-    # --- СПИСОК ЛИДОВ ---
+    # --- РАЗДЕЛ СПИСОК ЛИДОВ ---
     elif choice == "👥 Список лидов":
         st.header("👥 Работа с лидами")
-        
-        # БЛОК ФИЛЬТРОВ (ПОИСК, ДАТА, ЦВЕТ)
         with st.container():
             f_col1, f_col2, f_col3 = st.columns([2, 1.5, 1])
             search = f_col1.text_input("🔍 Поиск (Имя или телефон)", "", key="main_search")
@@ -112,12 +114,10 @@ def main():
         st.divider()
 
         tab_active, tab_archive = st.tabs(["🔥 Главная (Активные)", "📦 Весь Архив"])
-        
         with tab_active:
             leads_active = get_leads(search if search else None, st_d, en_d, mode="active", status_filter=color_f)
-            st.info(f"Активных лидов: **{len(leads_active)}** (ТОП-50)")
+            st.info(f"Активных лидов: **{len(leads_active)}** (ТОП-50 последних)")
             render_leads_list(leads_active, start_order=1)
-
         with tab_archive:
             leads_archive = get_leads(search if search else None, st_d, en_d, mode="archive", status_filter=color_f)
             total_arch = len(leads_archive)
@@ -128,9 +128,9 @@ def main():
                 page = st.number_input("Страница архива", min_value=1, max_value=num_p, key="arch_page")
                 render_leads_list(leads_archive[(page-1)*ipp : page*ipp], start_order=1)
 
-    # --- НОВЫЙ ЛИД ---
+    # --- РАЗДЕЛ НОВЫЙ ЛИД ---
     elif choice == "➕ Новый лид":
-        st.header("➕ Новая запись")
+        st.header("➕ Добавление записи")
         with st.form("manual_add", clear_on_submit=True):
             f1, f2 = st.columns(2)
             f_n = f1.text_input("ФИО")
@@ -138,28 +138,42 @@ def main():
             f3, f4 = st.columns(2)
             f_e = f3.text_input("Email")
             f_t = f4.text_input("Удобное время созвона")
-            f_c = st.text_input("Курс")
+            f5, f6 = st.columns(2)
+            f_c = f5.selectbox("Курс", COURSE_OPTIONS)
+            f_src = f6.selectbox("Источник", SOURCE_OPTIONS)
             f_cm = st.text_area("Комментарий")
             if st.form_submit_button("Создать запись"):
                 if f_n and f_p:
-                    add_lead(f_n, f_p, f_e, f_c, f_t, "Manual", f_cm); st.success("Лид добавлен!"); st.rerun()
+                    add_lead(f_n, f_p, f_e, f_c, f_t, f_src, f_cm); st.success("Лид добавлен!"); st.rerun()
                 else: st.error("Имя и Телефон обязательны")
 
-    # --- БАЗА ДАННЫХ ---
+    # --- РАЗДЕЛ БАЗА ДАННЫХ (ЭКСПОРТ) ---
     elif choice == "📂 База данных":
         st.header("📂 Управление базой")
         c_ex, c_arch, c_clr = st.columns(3)
-        
         with c_ex:
             st.subheader("📥 Экспорт")
             all_l = get_leads(mode="active") + get_leads(mode="archive")
             if all_l:
                 df_ex = pd.DataFrame(all_l)
-                if 'id' in df_ex.columns: df_ex = df_ex.drop(columns=['id'])
+                # Выбираем и переименовываем колонки для наглядности в Excel
+                cols_to_export = {
+                    'created_at': 'Дата добавления',
+                    'full_name': 'ФИО',
+                    'phone': 'Телефон',
+                    'email': 'Email',
+                    'course_name': 'Курс',
+                    'preferred_time': 'Время созвона',
+                    'source': 'Источник',
+                    'comment': 'Комментарий',
+                    'status_color': 'Статус (цвет)'
+                }
+                df_ex = df_ex[list(cols_to_export.keys())].rename(columns=cols_to_export)
+                
                 buf = io.BytesIO()
                 with pd.ExcelWriter(buf, engine='xlsxwriter') as wr:
                     df_ex.to_excel(wr, index=False, sheet_name='Leads')
-                st.download_button("📥 Скачать Excel", data=buf.getvalue(), file_name=f"export_{date.today()}.xlsx")
+                st.download_button("📥 Скачать Excel (все поля)", data=buf.getvalue(), file_name=f"leads_full_export_{date.today()}.xlsx")
         
         with c_arch:
             st.subheader("📦 Архивация")
@@ -200,10 +214,11 @@ def main():
             df_up = pd.read_excel(up, header=None)
             for _, r in df_up.iterrows():
                 v = list(r.values)
-                if len(v) >= 3: add_lead(str(v[1]), str(v[2]), str(v[3]) if len(v)>3 else '', str(v[4]) if len(v)>4 else '', str(v[5]) if len(v)>5 else '', "Excel")
+                if len(v) >= 3:
+                    add_lead(str(v[1]), str(v[2]), str(v[3]) if len(v)>3 else '', str(v[4]) if len(v)>4 else '', str(v[5]) if len(v)>5 else '', str(v[6]) if len(v)>6 else '', "Excel")
             st.success("Данные загружены!"); st.rerun()
 
-    # --- АДМИНИСТРИРОВАНИЕ ---
+    # --- РАЗДЕЛ АДМИНИСТРИРОВАНИЕ ---
     elif choice == "🔑 Администрирование" and st.session_state.get("role") == "superadmin":
         st.header("🔑 Управление доступом")
         new_m = st.text_input("Email:")
