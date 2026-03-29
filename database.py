@@ -50,6 +50,17 @@ def init_db():
     finally:
         conn.close()
 
+def get_archive_threshold():
+    conn = get_connection()
+    if not conn: return None
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT value FROM settings WHERE key = 'archive_date'")
+        res = cur.fetchone()
+        return res[0] if res else None
+    finally:
+        conn.close()
+
 def set_archive_threshold():
     conn = get_connection()
     if not conn: return
@@ -57,6 +68,7 @@ def set_archive_threshold():
         cur = conn.cursor()
         now = datetime.now()
         cur.execute("INSERT INTO settings (key, value) VALUES ('archive_date', %s) ON CONFLICT (key) DO UPDATE SET value = %s", (now.isoformat(), now.isoformat()))
+        # Помечаем всё как архивное
         cur.execute("UPDATE leads SET archived_at = %s WHERE archived_at IS NULL", (now,))
         conn.commit()
     finally:
@@ -91,13 +103,24 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
     if not conn: return []
     try:
         cur = conn.cursor()
+        threshold = get_archive_threshold()
         query = "SELECT * FROM leads WHERE 1=1"
         params = []
+
         if mode == "active":
+            # Активные: те, у кого нет метки архива И которые новее глобального порога
             query += " AND archived_at IS NULL"
+            if threshold:
+                query += " AND created_at > %s"
+                params.append(threshold)
             limit_sql = " LIMIT 50"
         else:
-            query += " AND archived_at IS NOT NULL"
+            # Архив: те, у кого ЕСТЬ метка архива ИЛИ которые старше порога
+            if threshold:
+                query += " AND (archived_at IS NOT NULL OR created_at <= %s)"
+                params.append(threshold)
+            else:
+                query += " AND (archived_at IS NOT NULL OR id NOT IN (SELECT id FROM leads ORDER BY id DESC LIMIT 50))"
             limit_sql = ""
 
         if status_filter and status_filter != "Все":

@@ -148,4 +148,5 @@ def main():
             c1, c2 = st.columns([4, 1]); c1.write(f"• {e}")
             if c2.button("Удалить", key=e): delete_allowed_email(e); st.rerun()
 
-if __name__ == "__main__": main()
+if __name__ == "__main__": 
+    main()
