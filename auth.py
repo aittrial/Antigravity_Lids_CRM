@@ -13,7 +13,7 @@ def check_password():
     if st.session_state["authenticated"]:
         return True
 
-    st.title("Lids_CRM - Авторизация")
+    st.title("Leads_CRM - Авторизация")
     
     auth_mode = st.radio("Выберите способ входа:", ["Superadmin (Master Password)", "Admin (Email)"])
 
