@@ -14,7 +14,6 @@ init_db()
 
 # Опции списков
 SOURCE_OPTIONS = ["Meta", "Google Landing", "Google Quiz", "Google", "Google leadform", "chatgpt.com", "Other"]
-# Добавлена опция "Both" перед "Accounting"
 COURSE_OPTIONS = ["QA testing", "Programming", "QA testing AIT", "Programming AIT", "Both", "Accounting", "Free course", "Other"]
 
 def get_status_color(status):
@@ -39,7 +38,6 @@ def render_leads_list(leads_data, start_order=1):
         """, unsafe_allow_html=True)
         
         with st.expander("Управление лидом"):
-            # Кнопки быстрых действий
             col_wa, col_copy = st.columns([1, 1])
             
             phone_num = ''.join(filter(str.isdigit, str(row['phone'])))
@@ -49,18 +47,13 @@ def render_leads_list(leads_data, start_order=1):
                     💬 WhatsApp</button></a>''', unsafe_allow_html=True)
             
             with col_copy:
-                # Формируем текст для копирования
+                # Компактный текст для копирования по твоему запросу
                 lead_text = f"""--- ДАННЫЕ ЛИДА ---
 ФИО: {row['full_name']}
 Телефон: {row['phone']}
 Email: {row['email']}
-Курс: {row['course_name']}
-Источник: {row.get('source', '---')}
-Время созвона: {pref_time}
-Комментарий: {row['comment']}
-Дата: {date_s}
-------------------"""
-                st.code(lead_text, language=None) # Дает кнопку копирования в интерфейсе Streamlit
+Курс: {row['course_name']}"""
+                st.code(lead_text, language=None)
             
             st.divider()
             
@@ -71,29 +64,21 @@ Email: {row['email']}
             
             c4, c5, c6 = st.columns(3)
             
-            # ВЫБОР КУРСА (Dropdown в таблице)
+            # Выбор курса (Dropdown)
             current_course = row['course_name'] if row['course_name'] in COURSE_OPTIONS else "Other"
             curr_c_select = c4.selectbox("Курс", COURSE_OPTIONS, index=COURSE_OPTIONS.index(current_course), key=f"cs_{row['id']}")
-            # Если выбрано Other, даем поле для ручного ввода
-            if curr_c_select == "Other":
-                curr_c = c4.text_input("Уточните курс", row['course_name'], key=f"c_manual_{row['id']}")
-            else:
-                curr_c = curr_c_select
+            curr_c = c4.text_input("Уточните курс", row['course_name'], key=f"c_manual_{row['id']}") if curr_c_select == "Other" else curr_c_select
 
             curr_t = c5.text_input("Время созвона", row.get('preferred_time', ''), key=f"t_{row['id']}")
             curr_s = c6.selectbox("Статус", ["white", "blue", "yellow", "red"], index=["white", "blue", "yellow", "red"].index(row['status_color']), key=f"s_{row['id']}")
             
             c7, c8 = st.columns(2)
             
-            # ВЫБОР ИСТОЧНИКА (Dropdown в таблице)
+            # Выбор источника (Dropdown)
             current_src_val = row.get('source', 'Other')
             if current_src_val not in SOURCE_OPTIONS: current_src_val = "Other"
             curr_src_select = c7.selectbox("Источник", SOURCE_OPTIONS, index=SOURCE_OPTIONS.index(current_src_val), key=f"srcs_{row['id']}")
-            
-            if curr_src_select == "Other":
-                curr_src = c7.text_input("Уточните источник", row.get('source', ''), key=f"src_manual_{row['id']}")
-            else:
-                curr_src = curr_src_select
+            curr_src = c7.text_input("Уточните источник", row.get('source', ''), key=f"src_manual_{row['id']}") if curr_src_select == "Other" else curr_src_select
 
             curr_comm = c8.text_area("Комментарии", row['comment'] if row['comment'] else "", key=f"cm_{row['id']}", height=100)
             
@@ -118,7 +103,7 @@ def main():
     today = date.today()
     default_start = today - timedelta(days=30)
 
-    # --- АНАЛИТИКА ---
+    # Аналитика
     if choice == "📊 Аналитика":
         st.header("📊 Аналитический дашборд")
         d_range = st.date_input("Период", value=(default_start, today))
@@ -141,7 +126,7 @@ def main():
             fig_area = px.area(daily, x='Дата', y='Лидов', title="Динамика поступления", template="plotly_white")
             cr.plotly_chart(fig_area, use_container_width=True)
 
-    # --- СПИСОК ЛИДОВ ---
+    # Список лидов
     elif choice == "👥 Список лидов":
         st.header("👥 Работа с лидами")
         with st.container():
@@ -168,7 +153,7 @@ def main():
                 page = st.number_input("Страница архива", min_value=1, max_value=num_p, key="arch_page")
                 render_leads_list(leads_archive[(page-1)*ipp : page*ipp], start_order=1)
 
-    # --- НОВЫЙ ЛИД ---
+    # Новый лид
     elif choice == "➕ Новый лид":
         st.header("➕ Добавление записи")
         with st.form("manual_add", clear_on_submit=True):
@@ -187,7 +172,7 @@ def main():
                     add_lead(f_n, f_p, f_e, f_c, f_t, f_src, f_cm); st.success("Лид добавлен!"); st.rerun()
                 else: st.error("Имя и Телефон обязательны")
 
-    # --- БАЗА ДАННЫХ ---
+    # База данных
     elif choice == "📂 База данных":
         st.header("📂 Управление базой")
         c_ex, c_arch, c_clr = st.columns(3)
@@ -225,7 +210,7 @@ def main():
                 if len(v) >= 3: add_lead(str(v[1]), str(v[2]), str(v[3]) if len(v)>3 else '', str(v[4]) if len(v)>4 else '', str(v[5]) if len(v)>5 else '', str(v[6]) if len(v)>6 else '', "Excel")
             st.success("Данные загружены!"); st.rerun()
 
-    # --- АДМИНИСТРИРОВАНИЕ ---
+    # Администрирование
     elif choice == "🔑 Администрирование" and st.session_state.get("role") == "superadmin":
         st.header("🔑 Доступы")
         new_m = st.text_input("Email:")
