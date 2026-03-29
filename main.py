@@ -12,9 +12,10 @@ APP_TITLE = "📈 LeadFlow | Lead Management System"
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 init_db()
 
-# Константы для выпадающих списков
+# Опции списков
 SOURCE_OPTIONS = ["Meta", "Google Landing", "Google Quiz", "Google", "Google leadform", "chatgpt.com", "Other"]
-COURSE_OPTIONS = ["QA testing", "Programming", "QA testing AIT", "Programming AIT", "Accounting", "Free course", "Other"]
+# Добавлена опция "Both" перед "Accounting"
+COURSE_OPTIONS = ["QA testing", "Programming", "QA testing AIT", "Programming AIT", "Both", "Accounting", "Free course", "Other"]
 
 def get_status_color(status):
     colors = {"blue": "#B3D7FF", "yellow": "#FFF59D", "red": "#FFAB91", "white": "#F0F2F6"}
@@ -38,10 +39,30 @@ def render_leads_list(leads_data, start_order=1):
         """, unsafe_allow_html=True)
         
         with st.expander("Управление лидом"):
+            # Кнопки быстрых действий
+            col_wa, col_copy = st.columns([1, 1])
+            
             phone_num = ''.join(filter(str.isdigit, str(row['phone'])))
-            st.markdown(f'''<a href="https://wa.me/{phone_num}" target="_blank">
-                <button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; width:100%;">
-                💬 WhatsApp</button></a>''', unsafe_allow_html=True)
+            with col_wa:
+                st.markdown(f'''<a href="https://wa.me/{phone_num}" target="_blank">
+                    <button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; width:100%;">
+                    💬 WhatsApp</button></a>''', unsafe_allow_html=True)
+            
+            with col_copy:
+                # Формируем текст для копирования
+                lead_text = f"""--- ДАННЫЕ ЛИДА ---
+ФИО: {row['full_name']}
+Телефон: {row['phone']}
+Email: {row['email']}
+Курс: {row['course_name']}
+Источник: {row.get('source', '---')}
+Время созвона: {pref_time}
+Комментарий: {row['comment']}
+Дата: {date_s}
+------------------"""
+                st.code(lead_text, language=None) # Дает кнопку копирования в интерфейсе Streamlit
+            
+            st.divider()
             
             c1, c2, c3 = st.columns(3)
             n = c1.text_input("ФИО", row['full_name'], key=f"n_{row['id']}")
@@ -49,13 +70,32 @@ def render_leads_list(leads_data, start_order=1):
             e = c3.text_input("Email", row['email'], key=f"e_{row['id']}")
             
             c4, c5, c6 = st.columns(3)
-            curr_c = c4.text_input("Курс", row['course_name'], key=f"c_{row['id']}")
+            
+            # ВЫБОР КУРСА (Dropdown в таблице)
+            current_course = row['course_name'] if row['course_name'] in COURSE_OPTIONS else "Other"
+            curr_c_select = c4.selectbox("Курс", COURSE_OPTIONS, index=COURSE_OPTIONS.index(current_course), key=f"cs_{row['id']}")
+            # Если выбрано Other, даем поле для ручного ввода
+            if curr_c_select == "Other":
+                curr_c = c4.text_input("Уточните курс", row['course_name'], key=f"c_manual_{row['id']}")
+            else:
+                curr_c = curr_c_select
+
             curr_t = c5.text_input("Время созвона", row.get('preferred_time', ''), key=f"t_{row['id']}")
             curr_s = c6.selectbox("Статус", ["white", "blue", "yellow", "red"], index=["white", "blue", "yellow", "red"].index(row['status_color']), key=f"s_{row['id']}")
             
             c7, c8 = st.columns(2)
-            curr_src = c7.text_input("Источник", row.get('source', ''), key=f"src_{row['id']}")
-            curr_comm = c8.text_area("Комментарии", row['comment'] if row['comment'] else "", key=f"cm_{row['id']}", height=68)
+            
+            # ВЫБОР ИСТОЧНИКА (Dropdown в таблице)
+            current_src_val = row.get('source', 'Other')
+            if current_src_val not in SOURCE_OPTIONS: current_src_val = "Other"
+            curr_src_select = c7.selectbox("Источник", SOURCE_OPTIONS, index=SOURCE_OPTIONS.index(current_src_val), key=f"srcs_{row['id']}")
+            
+            if curr_src_select == "Other":
+                curr_src = c7.text_input("Уточните источник", row.get('source', ''), key=f"src_manual_{row['id']}")
+            else:
+                curr_src = curr_src_select
+
+            curr_comm = c8.text_area("Комментарии", row['comment'] if row['comment'] else "", key=f"cm_{row['id']}", height=100)
             
             bs, bd = st.columns([1, 5])
             if bs.button("💾 Сохранить", key=f"sv_{row['id']}"):
@@ -78,7 +118,7 @@ def main():
     today = date.today()
     default_start = today - timedelta(days=30)
 
-    # --- РАЗДЕЛ АНАЛИТИКА ---
+    # --- АНАЛИТИКА ---
     if choice == "📊 Аналитика":
         st.header("📊 Аналитический дашборд")
         d_range = st.date_input("Период", value=(default_start, today))
@@ -101,7 +141,7 @@ def main():
             fig_area = px.area(daily, x='Дата', y='Лидов', title="Динамика поступления", template="plotly_white")
             cr.plotly_chart(fig_area, use_container_width=True)
 
-    # --- РАЗДЕЛ СПИСОК ЛИДОВ ---
+    # --- СПИСОК ЛИДОВ ---
     elif choice == "👥 Список лидов":
         st.header("👥 Работа с лидами")
         with st.container():
@@ -128,7 +168,7 @@ def main():
                 page = st.number_input("Страница архива", min_value=1, max_value=num_p, key="arch_page")
                 render_leads_list(leads_archive[(page-1)*ipp : page*ipp], start_order=1)
 
-    # --- РАЗДЕЛ НОВЫЙ ЛИД ---
+    # --- НОВЫЙ ЛИД ---
     elif choice == "➕ Новый лид":
         st.header("➕ Добавление записи")
         with st.form("manual_add", clear_on_submit=True):
@@ -147,7 +187,7 @@ def main():
                     add_lead(f_n, f_p, f_e, f_c, f_t, f_src, f_cm); st.success("Лид добавлен!"); st.rerun()
                 else: st.error("Имя и Телефон обязательны")
 
-    # --- РАЗДЕЛ БАЗА ДАННЫХ (ЭКСПОРТ) ---
+    # --- БАЗА ДАННЫХ ---
     elif choice == "📂 База данных":
         st.header("📂 Управление базой")
         c_ex, c_arch, c_clr = st.columns(3)
@@ -156,56 +196,24 @@ def main():
             all_l = get_leads(mode="active") + get_leads(mode="archive")
             if all_l:
                 df_ex = pd.DataFrame(all_l)
-                # Выбираем и переименовываем колонки для наглядности в Excel
-                cols_to_export = {
-                    'created_at': 'Дата добавления',
-                    'full_name': 'ФИО',
-                    'phone': 'Телефон',
-                    'email': 'Email',
-                    'course_name': 'Курс',
-                    'preferred_time': 'Время созвона',
-                    'source': 'Источник',
-                    'comment': 'Комментарий',
-                    'status_color': 'Статус (цвет)'
-                }
+                cols_to_export = {'created_at': 'Дата', 'full_name': 'ФИО', 'phone': 'Телефон', 'email': 'Email', 'course_name': 'Курс', 'preferred_time': 'Время', 'source': 'Источник', 'comment': 'Комментарий', 'status_color': 'Статус'}
                 df_ex = df_ex[list(cols_to_export.keys())].rename(columns=cols_to_export)
-                
                 buf = io.BytesIO()
                 with pd.ExcelWriter(buf, engine='xlsxwriter') as wr:
                     df_ex.to_excel(wr, index=False, sheet_name='Leads')
-                st.download_button("📥 Скачать Excel (все поля)", data=buf.getvalue(), file_name=f"leads_full_export_{date.today()}.xlsx")
+                st.download_button("📥 Скачать Excel", data=buf.getvalue(), file_name=f"export_{date.today()}.xlsx")
         
         with c_arch:
             st.subheader("📦 Архивация")
             if st.session_state.get("role") == "superadmin":
                 if 'confirm_arch' not in st.session_state: st.session_state.confirm_arch = False
                 if not st.session_state.confirm_arch:
-                    if st.button("📦 ВСЁ В АРХИВ"):
-                        st.session_state.confirm_clear = False
-                        st.session_state.confirm_arch = True; st.rerun()
+                    if st.button("📦 ВСЁ В АРХИВ"): st.session_state.confirm_arch = True; st.rerun()
                 else:
-                    st.warning("Вы уверены? Главная страница станет пустой!")
+                    st.warning("Вы уверены?")
                     ca_y, ca_n = st.columns(2)
-                    if ca_y.button("✅ Да, архивировать"):
-                        set_archive_threshold(); st.session_state.confirm_arch = False; st.success("Успех!"); st.rerun()
-                    if ca_n.button("❌ Отмена"):
-                        st.session_state.confirm_arch = False; st.rerun()
-
-        with c_clr:
-            st.subheader("🔥 Очистка")
-            if st.session_state.get("role") == "superadmin":
-                if 'confirm_clear' not in st.session_state: st.session_state.confirm_clear = False
-                if not st.session_state.confirm_clear:
-                    if st.button("🔥 УДАЛИТЬ ВСЁ"):
-                        st.session_state.confirm_arch = False
-                        st.session_state.confirm_clear = True; st.rerun()
-                else:
-                    st.error("ВЫ УВЕРЕНЫ? Это удалит базу полностью!")
-                    cc_y, cc_n = st.columns(2)
-                    if cc_y.button("✅ Да, Стереть"):
-                        clear_all_leads(); st.session_state.confirm_clear = False; st.rerun()
-                    if cc_n.button("❌ Нет, Отмена"):
-                        st.session_state.confirm_clear = False; st.rerun()
+                    if ca_y.button("✅ Да"): set_archive_threshold(); st.session_state.confirm_arch = False; st.rerun()
+                    if ca_n.button("❌ Нет"): st.session_state.confirm_arch = False; st.rerun()
 
         st.divider()
         st.subheader("🚀 Импорт")
@@ -214,13 +222,12 @@ def main():
             df_up = pd.read_excel(up, header=None)
             for _, r in df_up.iterrows():
                 v = list(r.values)
-                if len(v) >= 3:
-                    add_lead(str(v[1]), str(v[2]), str(v[3]) if len(v)>3 else '', str(v[4]) if len(v)>4 else '', str(v[5]) if len(v)>5 else '', str(v[6]) if len(v)>6 else '', "Excel")
+                if len(v) >= 3: add_lead(str(v[1]), str(v[2]), str(v[3]) if len(v)>3 else '', str(v[4]) if len(v)>4 else '', str(v[5]) if len(v)>5 else '', str(v[6]) if len(v)>6 else '', "Excel")
             st.success("Данные загружены!"); st.rerun()
 
-    # --- РАЗДЕЛ АДМИНИСТРИРОВАНИЕ ---
+    # --- АДМИНИСТРИРОВАНИЕ ---
     elif choice == "🔑 Администрирование" and st.session_state.get("role") == "superadmin":
-        st.header("🔑 Управление доступом")
+        st.header("🔑 Доступы")
         new_m = st.text_input("Email:")
         if st.button("Добавить"):
             if new_m: add_allowed_email(new_m); st.rerun()
