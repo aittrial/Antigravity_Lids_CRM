@@ -4,10 +4,10 @@ import plotly.express as px
 import io
 from datetime import datetime, date, timedelta
 from database import (init_db, get_leads, add_lead, update_lead, delete_lead, 
-                      clear_all_leads, get_allowed_emails, add_allowed_email, delete_allowed_email, set_archive_threshold)
+                      clear_all_leads, get_allowed_emails, add_allowed_email, delete_allowed_email, set_archive_threshold, archive_single_lead)
 from auth import check_password, logout
 
-APP_TITLE = "📈 LeadFlow | Lead Management System"
+APP_TITLE = "📈 Leads_CRM | Lead Management System"
 
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 init_db()
@@ -21,7 +21,7 @@ def get_status_color(status):
     colors = {"blue": "#B3D7FF", "yellow": "#FFF59D", "red": "#FFAB91", "green": "#C8E6C9", "purple": "#E1BEE7", "white": "#F0F2F6"}
     return colors.get(status, "#F0F2F6")
 
-def render_leads_list(leads_data, start_order=1):
+def render_leads_list(leads_data, start_order=1, can_archive=False):
     if not leads_data:
         st.info("По заданным фильтрам ничего не найдено.")
         return
@@ -31,19 +31,23 @@ def render_leads_list(leads_data, start_order=1):
         pref_time = row.get('preferred_time', '---')
         st.markdown(f'<div style="background-color:{color}; border-radius:10px; padding:12px; margin-bottom:10px; border:2px solid #444; color: black !important;"><b style="color: black !important; font-size: 14px;">#{start_order+i} | 📅 {date_s} | 🕒 {pref_time} | {row["full_name"]} | {row["phone"]}</b></div>', unsafe_allow_html=True)
         with st.expander("Управление"):
-            col_wa, col_copy = st.columns([1, 1])
+            col_wa, col_copy, col_arch = st.columns([1, 1, 1])
             p_clean = ''.join(filter(str.isdigit, str(row['phone'])))
             with col_wa: st.markdown(f'''<a href="https://wa.me/{p_clean}" target="_blank"><button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; width:100%;">💬 WhatsApp</button></a>''', unsafe_allow_html=True)
             with col_copy:
                 txt = f"--- ДАННЫЕ ЛИДА ---\nФИО: {row['full_name']}\nТелефон: {row['phone']}\nEmail: {row['email']}\nКурс: {row['course_name']}"
                 st.code(txt, language=None)
+            with col_arch:
+                if can_archive:
+                    if st.button("📦 В архив", key=f"arch_btn_{row['id']}"):
+                        archive_single_lead(row['id']); st.rerun()
             st.divider()
             c1, c2, c3 = st.columns(3)
             n, p, e = c1.text_input("ФИО", row['full_name'], key=f"n_{row['id']}"), c2.text_input("Телефон", row['phone'], key=f"p_{row['id']}"), c3.text_input("Email", row['email'], key=f"e_{row['id']}")
             c4, c5, c6 = st.columns(3)
             cur_c_idx = COURSE_OPTIONS.index(row['course_name']) if row['course_name'] in COURSE_OPTIONS else COURSE_OPTIONS.index("Other")
             curr_c_sel = c4.selectbox("Курс", COURSE_OPTIONS, index=cur_c_idx, key=f"cs_{row['id']}")
-            curr_c = c4.text_input("Уточните", row['course_name'], key=f"c_man_{row['id']}") if curr_c_sel == "Other" else curr_c_sel
+            curr_c = c4.text_input("Уточните", row['course_name'], key=f"c_m_{row['id']}") if curr_c_sel == "Other" else curr_c_sel
             curr_t = c5.text_input("Время", row.get('preferred_time', ''), key=f"t_{row['id']}")
             curr_s = c6.selectbox("Статус", COLOR_KEYS, index=COLOR_KEYS.index(row['status_color']), key=f"s_{row['id']}")
             c7, c8 = st.columns(2)
@@ -89,7 +93,7 @@ def main():
         search, dr, color_f = f1.text_input("🔍 Поиск"), f2.date_input("📅 Дата", value=(d_start, today)), f3.selectbox("🎨 Статус", FILTER_COLOR_MAP)
         st_d, en_d = (dr[0], dr[1]) if len(dr) == 2 else (None, None)
         t1, t2 = st.tabs(["🔥 Активные", "📦 Архив"])
-        with t1: render_leads_list(get_leads(search, st_d, en_d, mode="active", status_filter=color_f))
+        with t1: render_leads_list(get_leads(search, st_d, en_d, mode="active", status_filter=color_f), can_archive=True)
         with t2:
             arch = get_leads(search, st_d, en_d, mode="archive", status_filter=color_f)
             if arch:
@@ -110,14 +114,16 @@ def main():
     elif choice == "📂 База данных":
         st.header("📂 Управление базой")
         c1, c2, c3 = st.columns(3)
+        all_l = get_leads(mode="active") + get_leads(mode="archive")
         with c1:
             st.subheader("📥 Экспорт")
-            all_l = get_leads(mode="active") + get_leads(mode="archive")
             if all_l:
                 df = pd.DataFrame(all_l)
-                buf = io.BytesIO()
-                with pd.ExcelWriter(buf, engine='xlsxwriter') as wr: df.to_excel(wr, index=False)
-                st.download_button("📥 Скачать Excel", data=buf.getvalue(), file_name=f"leads_{date.today()}.xlsx")
+                buf_x = io.BytesIO()
+                with pd.ExcelWriter(buf_x, engine='xlsxwriter') as wr: df.to_excel(wr, index=False)
+                st.download_button("📥 Excel (.xlsx)", data=buf_x.getvalue(), file_name=f"leads_{date.today()}.xlsx")
+                csv = df.to_csv(index=False).encode('utf-8')
+                st.download_button("📥 CSV (.csv)", data=csv, file_name=f"leads_{date.today()}.csv", mime='text/csv')
         with c2:
             st.subheader("📦 Архивация")
             if st.session_state.get("role") == "superadmin":

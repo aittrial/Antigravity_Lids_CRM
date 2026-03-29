@@ -39,13 +39,13 @@ def init_db():
             source TEXT,
             comment TEXT,
             status_color VARCHAR(50) DEFAULT 'white',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            archived_at TIMESTAMP DEFAULT NULL
         );
         """)
+        cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL;")
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS preferred_time TEXT;")
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS source TEXT;")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_id_desc ON leads (id DESC);")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads (created_at);")
         conn.commit()
     finally:
         conn.close()
@@ -55,20 +55,20 @@ def set_archive_threshold():
     if not conn: return
     try:
         cur = conn.cursor()
-        now = datetime.now().isoformat()
-        cur.execute("INSERT INTO settings (key, value) VALUES ('archive_date', %s) ON CONFLICT (key) DO UPDATE SET value = %s", (now, now))
+        now = datetime.now()
+        cur.execute("INSERT INTO settings (key, value) VALUES ('archive_date', %s) ON CONFLICT (key) DO UPDATE SET value = %s", (now.isoformat(), now.isoformat()))
+        cur.execute("UPDATE leads SET archived_at = %s WHERE archived_at IS NULL", (now,))
         conn.commit()
     finally:
         conn.close()
 
-def get_archive_threshold():
+def archive_single_lead(lead_id):
     conn = get_connection()
-    if not conn: return None
+    if not conn: return
     try:
         cur = conn.cursor()
-        cur.execute("SELECT value FROM settings WHERE key = 'archive_date'")
-        res = cur.fetchone()
-        return res[0] if res else None
+        cur.execute("UPDATE leads SET archived_at = %s WHERE id = %s", (datetime.now(), lead_id))
+        conn.commit()
     finally:
         conn.close()
 
@@ -91,21 +91,13 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
     if not conn: return []
     try:
         cur = conn.cursor()
-        threshold = get_archive_threshold()
         query = "SELECT * FROM leads WHERE 1=1"
         params = []
-        
         if mode == "active":
-            if threshold:
-                query += " AND created_at > %s"
-                params.append(threshold)
+            query += " AND archived_at IS NULL"
             limit_sql = " LIMIT 50"
         else:
-            if threshold:
-                query += " AND (created_at <= %s OR id NOT IN (SELECT id FROM leads WHERE created_at > %s ORDER BY id DESC LIMIT 50))"
-                params.extend([threshold, threshold])
-            else:
-                query += " AND id NOT IN (SELECT id FROM leads ORDER BY id DESC LIMIT 50)"
+            query += " AND archived_at IS NOT NULL"
             limit_sql = ""
 
         if status_filter and status_filter != "Все":
@@ -124,7 +116,6 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
             params.append(datetime.combine(end_date, datetime.max.time()))
 
         query += " ORDER BY id DESC" + limit_sql
-        
         cur.execute(query, params)
         colnames = [desc[0] for desc in cur.description]
         return [dict(zip(colnames, row)) for row in cur.fetchall()]
