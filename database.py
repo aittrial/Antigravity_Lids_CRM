@@ -109,10 +109,7 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
             limit_sql = ""
 
         if status_filter and status_filter != "Все":
-            status_map = {
-                "Белый": "white", "Синий": "blue", "Желтый": "yellow", 
-                "Красный": "red", "Зеленый": "green", "Фиолетовый": "purple"
-            }
+            status_map = {"Белый": "white", "Синий": "blue", "Желтый": "yellow", "Красный": "red", "Зеленый": "green", "Фиолетовый": "purple"}
             query += " AND status_color = %s"
             params.append(status_map.get(status_filter, "white"))
 
