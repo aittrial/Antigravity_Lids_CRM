@@ -14,7 +14,7 @@ APP_TITLE = "📈 Leads_CRM | Lead Management System"
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 init_db()
 
-# ТВОИ ДАННЫЕ TELEGRAM
+# ТВОИ ДАННЫЕ TELEGRAM (Прописаны жестко для надежности)
 TELE_TOKEN = "8500719540:AAG3KzK7aP3FyZoE-QmRPysKJKEO9KAHWwU"
 TELE_CHAT_ID = "-1003793353079"
 
@@ -27,13 +27,13 @@ FILTER_COLOR_MAP = ["Все", "Белый", "Синий", "Желтый", "Кр�
 
 def send_telegram_backup(df):
     try:
-        # 1. Готовим Excel
+        # XLSX
         buf_xls = io.BytesIO()
         with pd.ExcelWriter(buf_xls, engine='xlsxwriter') as writer:
             df.to_excel(writer, index=False)
         buf_xls.seek(0)
 
-        # 2. Готовим CSV
+        # CSV
         buf_csv = io.BytesIO()
         df.to_csv(buf_csv, index=False, encoding='utf-8-sig')
         buf_csv.seek(0)
@@ -41,26 +41,16 @@ def send_telegram_backup(df):
         url = f"https://api.telegram.org/bot{TELE_TOKEN}/sendDocument"
         caption = f"📦 CRM FULL BACKUP (XLSX + CSV)\n📅 Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}\n👥 Лидов в базе: {len(df)}"
         
-        # Отправляем XLSX
-        res1 = requests.post(url, data={'chat_id': TELE_CHAT_ID, 'caption': caption}, 
-                             files={'document': (f"leads_backup_{date.today()}.xlsx", buf_xls)})
+        # Отправка XLSX
+        requests.post(url, data={'chat_id': TELE_CHAT_ID, 'caption': caption}, files={'document': (f"leads_backup_{date.today()}.xlsx", buf_xls)})
+        # Отправка CSV
+        res2 = requests.post(url, data={'chat_id': TELE_CHAT_ID}, files={'document': (f"leads_backup_{date.today()}.csv", buf_csv)})
         
-        # Отправляем CSV
-        res2 = requests.post(url, data={'chat_id': TELE_CHAT_ID}, 
-                             files={'document': (f"leads_backup_{date.today()}.csv", buf_csv)})
-        
-        if res1.status_code == 200 and res2.status_code == 200:
-            return True, "✅ Оба файла (Excel и CSV) отправлены в Telegram!"
-        else:
-            return False, "❌ Ошибка при отправке одного из файлов."
-    except Exception as e: 
-        return False, f"❌ Ошибка бэкапа: {e}"
+        return (True, "✅ Оба файла отправлены в Telegram!") if res2.status_code == 200 else (False, "❌ Ошибка отправки.")
+    except Exception as e: return False, f"❌ Ошибка бэкапа: {e}"
 
 def get_status_color(status):
-    colors = {
-        "blue": "#B3D7FF", "yellow": "#FFF59D", "red": "#FFAB91", 
-        "green": "#C8E6C9", "purple": "#E1BEE7", "pink": "#F8BBD0", "white": "#F0F2F6"
-    }
+    colors = {"blue": "#B3D7FF", "yellow": "#FFF59D", "red": "#FFAB91", "green": "#C8E6C9", "purple": "#E1BEE7", "pink": "#F8BBD0", "white": "#F0F2F6"}
     return colors.get(status, "#F0F2F6")
 
 def render_leads_list(leads_data, start_order=1, can_archive=False):
@@ -76,11 +66,10 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
             c_wa, c_co, c_ar = st.columns(3)
             p_cl = ''.join(filter(str.isdigit, str(row['phone'])))
             with c_wa: st.markdown(f'''<a href="https://wa.me/{p_cl}" target="_blank"><button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; width:100%;">💬 WhatsApp</button></a>''', unsafe_allow_html=True)
-            with c_co: st.code(f"ФИО: {row['full_name']}\nТел: {row['phone']}\nEmail: {row['email']}\nКурс: {row['course_name']}", language=None)
+            with c_co: st.code(f"ФИО: {row['full_name']}\nТел: {row['phone']}\nКурс: {row['course_name']}", language=None)
             with c_ar:
                 if can_archive and st.button("📦 В архив", key=f"arch_{row['id']}"):
                     archive_single_lead(row['id']); st.rerun()
-            
             st.divider()
             c1, c2, c3 = st.columns(3)
             n, p, e = c1.text_input("ФИО", row['full_name'], key=f"n_{row['id']}"), c2.text_input("Тел", row['phone'], key=f"p_{row['id']}"), c3.text_input("Email", row['email'], key=f"e_{row['id']}")
@@ -108,7 +97,7 @@ def main():
 
     # --- АНАЛИТИКА ---
     if choice == "📊 Аналитика":
-        st.header("📊 Аналитика базы")
+        st.header("📊 Аналитика")
         all_leads = get_leads(mode="all")
         df_all = pd.DataFrame(all_leads)
         if not df_all.empty:
@@ -122,36 +111,28 @@ def main():
             m[6].metric("💗 Работа 2", len(df_all[df_all['status_color']=='pink']))
             st.divider()
             last_week = date.today() - timedelta(days=7)
-            c_left, c_right = st.columns(2)
-            with c_left:
-                st.subheader("📈 Динамика (Активные ТОП-50)")
-                df_active = pd.DataFrame(get_leads(mode="active"))
-                if not df_active.empty:
-                    df_active['day'] = pd.to_datetime(df_active['created_at']).dt.date
-                    df_active_week = df_active[df_active['day'] >= last_week]
-                    dynamic_data = df_active_week.groupby('day').size().reset_index(name='лидов')
-                    st.plotly_chart(px.area(dynamic_data, x='day', y='лидов', template="plotly_white"), use_container_width=True)
-            with c_right:
-                st.subheader("🎨 Статусы (Неделя)")
-                df_week = df_all[pd.to_datetime(df_all['created_at']).dt.date >= last_week]
-                if not df_week.empty:
-                    df_colored = df_week[df_week['status_color'] != 'white']
-                    st_counts = df_colored['status_color'].value_counts().reset_index()
-                    st_counts.columns = ['Статус', 'Кол-во']
-                    st.plotly_chart(px.bar(st_counts, x='Кол-во', y='Статус', orientation='h', color='Статус',
-                                      color_discrete_map={'blue':'#B3D7FF','yellow':'#FFF59D','red':'#FFAB91','green':'#C8E6C9','purple':'#E1BEE7','pink':'#F8BBD0'},
-                                      template="plotly_white"), use_container_width=True)
-                    st.markdown(f"⚪ **Необработанные (белые) за 7 дней:** `{len(df_week[df_week['status_color'] == 'white'])}`")
+            c_l, c_r = st.columns(2)
+            with c_l:
+                df_act = pd.DataFrame(get_leads(mode="active"))
+                if not df_act.empty:
+                    df_act['day'] = pd.to_datetime(df_act['created_at']).dt.date
+                    dyn = df_act[df_act['day'] >= last_week].groupby('day').size().reset_index(name='лидов')
+                    st.plotly_chart(px.area(dyn, x='day', y='лидов', title="Динамика (Активные за 7 дней)"), use_container_width=True)
+            with c_r:
+                df_w = df_all[pd.to_datetime(df_all['created_at']).dt.date >= last_week]
+                if not df_w.empty:
+                    st_c = df_w[df_w['status_color'] != 'white']['status_color'].value_counts().reset_index()
+                    st_c.columns = ['Статус', 'Кол-во']
+                    st.plotly_chart(px.bar(st_c, x='Кол-во', y='Статус', orientation='h', color='Статус', color_discrete_map={'blue':'#B3D7FF','yellow':'#FFF59D','red':'#FFAB91','green':'#C8E6C9','purple':'#E1BEE7','pink':'#F8BBD0'}, template="plotly_white"), use_container_width=True)
+                    st.markdown(f"⚪ **Новые (белые) за неделю:** `{len(df_w[df_w['status_color'] == 'white'])}`")
         else: st.info("База пуста")
 
     # --- СПИСОК ЛИДОВ ---
     elif choice == "👥 Список лидов":
-        st.header("👥 Лиды")
+        st.header("👥 Работа с лидами")
         f1, f2, f3, f4 = st.columns([2, 1.2, 1, 1])
-        search = f1.text_input("🔍 Поиск")
-        dr = f2.date_input("📅 Дата", value=(date.today()-timedelta(days=30), date.today()))
-        color_f = f3.selectbox("🎨 Статус", FILTER_COLOR_MAP)
-        source_f = f4.selectbox("📡 Источник", FILTER_SOURCE_MAP)
+        search, dr = f1.text_input("🔍 Поиск"), f2.date_input("📅 Дата", value=(date.today()-timedelta(days=30), date.today()))
+        color_f, source_f = f3.selectbox("🎨 Статус", FILTER_COLOR_MAP), f4.selectbox("📡 Источник", FILTER_SOURCE_MAP)
         st_d, en_d = (dr[0], dr[1]) if len(dr) == 2 else (None, None)
         t1, t2 = st.tabs(["🔥 Активные (ТОП-50)", "📦 Архив"])
         with t1: render_leads_list(get_leads(search, st_d, en_d, mode="active", status_filter=color_f, source_filter=source_f), can_archive=True)
@@ -170,9 +151,9 @@ def main():
             c5, c6 = st.columns(2); cur, src = c5.selectbox("Курс", COURSE_OPTIONS), c6.selectbox("Источник", SOURCE_OPTIONS)
             s, comm = st.selectbox("Статус", COLOR_KEYS), st.text_area("Комментарий")
             if st.form_submit_button("Создать"):
-                if n and p: add_lead(n, p, e, cur, t, src, comm, s); st.success("Добавлено!"); st.rerun()
+                if n and p: add_lead(n, p, e, cur, t, src, comm, s); st.success("Лид добавлен!"); st.rerun()
 
-    # --- БАЗА ДАННЫХ (v7.0 Excel + CSV) ---
+    # --- БАЗА ДАННЫХ ---
     elif choice == "📂 База данных":
         st.header("📂 Управление базой")
         c1, c2, c3 = st.columns(3)
@@ -181,20 +162,16 @@ def main():
             st.subheader("📥 Экспорт")
             if all_data:
                 df = pd.DataFrame(all_data)
-                # Локальный Excel
+                # XLSX
                 buf_xls = io.BytesIO()
                 with pd.ExcelWriter(buf_xls, engine='xlsxwriter') as wr: df.to_excel(wr, index=False)
-                st.download_button("📥 Скачать Excel (.xlsx)", data=buf_xls.getvalue(), file_name=f"leads_{date.today()}.xlsx")
-                
-                # Локальный CSV
-                csv_data = df.to_csv(index=False).encode('utf-8-sig')
-                st.download_button("📥 Скачать CSV (.csv)", data=csv_data, file_name=f"leads_{date.today()}.csv", mime="text/csv")
-                
+                st.download_button("📥 Excel (.xlsx)", data=buf_xls.getvalue(), file_name=f"leads_{date.today()}.xlsx", mime="application/vnd.ms-excel")
+                # CSV
+                st.download_button("📥 CSV (.csv)", data=df.to_csv(index=False).encode('utf-8-sig'), file_name=f"leads_{date.today()}.csv", mime="text/csv")
                 st.divider()
                 if st.button("🤖 Бэкап в Telegram (XLSX + CSV)"):
                     ok, msg = send_telegram_backup(df)
                     st.success(msg) if ok else st.error(msg)
-        
         with c2:
             st.subheader("📦 Архивация")
             if st.session_state.get("role") == "superadmin" and st.button("📦 ВСЁ В АРХИВ"):
@@ -203,6 +180,23 @@ def main():
             st.subheader("🔥 Очистка")
             if st.session_state.get("role") == "superadmin" and st.button("🔥 УДАЛИТЬ ВСЁ"):
                 clear_all_leads(); st.rerun()
+        
+        # --- ВОЗВРАЩЕННЫЙ БЛОК ИМПОРТА ---
+        st.divider()
+        st.subheader("🚀 Импорт из Excel")
+        up = st.file_uploader("Выберите XLSX файл для загрузки", type=["xlsx"])
+        if up and st.button("🚀 Загрузить данные в базу"):
+            try:
+                df_up = pd.read_excel(up, header=None)
+                for _, r in df_up.iterrows():
+                    v = list(r.values)
+                    # Формат: ФИО(1), Тел(2), Email(3), Курс(4), Время(5), Источник(6), Коммент(7)
+                    if len(v) >= 3:
+                        add_lead(str(v[1]), str(v[2]), str(v[3]) if len(v)>3 else '', 
+                                 str(v[4]) if len(v)>4 else '', str(v[5]) if len(v)>5 else '', 
+                                 str(v[6]) if len(v)>6 else '', str(v[7]) if len(v)>7 else 'Excel Import')
+                st.success("✅ Импорт завершен успешно!"); st.rerun()
+            except Exception as e: st.error(f"❌ Ошибка импорта: {e}")
 
     elif choice == "🔑 Администрирование" and st.session_state.get("role") == "superadmin":
         st.header("🔑 Доступы")
