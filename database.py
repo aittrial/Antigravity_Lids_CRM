@@ -97,7 +97,7 @@ def add_lead(full_name, phone, email='', course_name='', preferred_time='', sour
     finally:
         conn.close()
 
-def get_leads(search_query=None, start_date=None, end_date=None, mode="active", status_filter=None):
+def get_leads(search_query=None, start_date=None, end_date=None, mode="active", status_filter=None, source_filter=None):
     conn = get_connection()
     if not conn: return []
     try:
@@ -119,17 +119,24 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
             else:
                 query += " AND archived_at IS NOT NULL"
             limit_sql = ""
-        else: # Для бэкапа (все лиды)
+        else: # "all" для аналитики и бэкапа
             limit_sql = ""
 
+        # Фильтр по цвету
         if status_filter and status_filter != "Все":
-            status_map = {"Белый": "white", "Синий": "blue", "Желтый": "yellow", "Красный": "red", "Зеленый": "green", "Фиолетовый": "purple"}
+            status_map = {"Белый": "white", "Синий": "blue", "Желтый": "yellow", "Красный": "red", "Зеленый": "green", "Фиолетовый": "purple", "Розовый": "pink"}
             query += " AND status_color = %s"
             params.append(status_map.get(status_filter, "white"))
+
+        # Фильтр по источнику
+        if source_filter and source_filter != "Все":
+            query += " AND source = %s"
+            params.append(source_filter)
 
         if search_query:
             query += " AND (full_name ILIKE %s OR phone ILIKE %s)"
             params.extend([f"%{search_query}%", f"%{search_query}%"])
+        
         if start_date:
             query += " AND created_at >= %s"
             params.append(start_date)
