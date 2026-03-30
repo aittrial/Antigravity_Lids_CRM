@@ -68,7 +68,6 @@ def set_archive_threshold():
         cur = conn.cursor()
         now = datetime.now()
         cur.execute("INSERT INTO settings (key, value) VALUES ('archive_date', %s) ON CONFLICT (key) DO UPDATE SET value = %s", (now.isoformat(), now.isoformat()))
-        # Помечаем всё как архивное
         cur.execute("UPDATE leads SET archived_at = %s WHERE archived_at IS NULL", (now,))
         conn.commit()
     finally:
@@ -108,19 +107,19 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
         params = []
 
         if mode == "active":
-            # Активные: те, у кого нет метки архива И которые новее глобального порога
             query += " AND archived_at IS NULL"
             if threshold:
                 query += " AND created_at > %s"
                 params.append(threshold)
             limit_sql = " LIMIT 50"
-        else:
-            # Архив: те, у кого ЕСТЬ метка архива ИЛИ которые старше порога
+        elif mode == "archive":
             if threshold:
                 query += " AND (archived_at IS NOT NULL OR created_at <= %s)"
                 params.append(threshold)
             else:
-                query += " AND (archived_at IS NOT NULL OR id NOT IN (SELECT id FROM leads ORDER BY id DESC LIMIT 50))"
+                query += " AND archived_at IS NOT NULL"
+            limit_sql = ""
+        else: # Для бэкапа (все лиды)
             limit_sql = ""
 
         if status_filter and status_filter != "Все":

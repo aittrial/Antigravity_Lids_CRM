@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import io
+import requests
+import os
 from datetime import datetime, date, timedelta
 from database import (init_db, get_leads, add_lead, update_lead, delete_lead, 
                       clear_all_leads, get_allowed_emails, add_allowed_email, delete_allowed_email, set_archive_threshold, archive_single_lead)
@@ -12,10 +14,36 @@ APP_TITLE = "📈 Leads_CRM | Lead Management System"
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 init_db()
 
+# НАСТРОЙКИ TELEGRAM
+TELE_TOKEN = "8500719540:AAG3KzK7aP3FyZoE-QmRPysKJKEO9KAHWwU"
+TELE_CHAT_ID = "-1003793353079"
+
 SOURCE_OPTIONS = ["Meta", "Google Landing", "Google Quiz", "Google", "Google leadform", "chatgpt.com", "Other"]
 COURSE_OPTIONS = ["QA testing", "Programming", "QA testing AIT", "Programming AIT", "Both", "Accounting", "Free course", "Other"]
 COLOR_KEYS = ["white", "blue", "yellow", "red", "green", "purple"]
 FILTER_COLOR_MAP = ["Все", "Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый"]
+
+def send_telegram_backup(df):
+    try:
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df.to_excel(writer, index=False, sheet_name='Full_Database_Backup')
+        output.seek(0)
+        
+        url = f"https://api.telegram.org/bot{TELE_TOKEN}/sendDocument"
+        files = {'document': (f"leads_backup_{date.today()}.xlsx", output)}
+        data = {
+            'chat_id': TELE_CHAT_ID, 
+            'caption': f"📦 CRM FULL BACKUP\n📅 Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}\n👥 Всего лидов: {len(df)}"
+        }
+        
+        res = requests.post(url, data=data, files=files)
+        if res.status_code == 200:
+            return True, "✅ Файл успешно отправлен в Telegram группу!"
+        else:
+            return False, f"❌ Ошибка Telegram: {res.text}"
+    except Exception as e:
+        return False, f"❌ Системная ошибка: {e}"
 
 def get_status_color(status):
     colors = {"blue": "#B3D7FF", "yellow": "#FFF59D", "red": "#FFAB91", "green": "#C8E6C9", "purple": "#E1BEE7", "white": "#F0F2F6"}
@@ -71,6 +99,7 @@ def main():
     if st.sidebar.button("🚪 Выход"): logout()
     today, d_start = date.today(), date.today() - timedelta(days=30)
 
+    # --- Аналитика ---
     if choice == "📊 Аналитика":
         st.header("📊 Аналитика")
         dr = st.date_input("Период", value=(d_start, today))
@@ -87,6 +116,7 @@ def main():
             df['day'] = pd.to_datetime(df['created_at']).dt.date
             cr.plotly_chart(px.area(df.groupby('day').size().reset_index(name='leads'), x='day', y='leads', title="Динамика", template="plotly_white"), use_container_width=True)
 
+    # --- Список лидов ---
     elif choice == "👥 Список лидов":
         st.header("👥 Лиды")
         f1, f2, f3 = st.columns([2, 1.5, 1.2])
@@ -100,6 +130,7 @@ def main():
                 pg = st.number_input("Страница", 1, max(1, len(arch)//50 + 1))
                 render_leads_list(arch[(pg-1)*50 : pg*50])
 
+    # --- Новый лид ---
     elif choice == "➕ Новый лид":
         st.header("➕ Добавить лид")
         with st.form("add_f", clear_on_submit=True):
@@ -111,19 +142,26 @@ def main():
                 if n and p: add_lead(n, p, e, cur, t, src, comm, s); st.success("Готово!"); st.rerun()
                 else: st.error("Имя и Телефон!")
 
+    # --- База данных ---
     elif choice == "📂 База данных":
         st.header("📂 Управление базой")
         c1, c2, c3 = st.columns(3)
-        all_l = get_leads(mode="active") + get_leads(mode="archive")
+        all_leads_backup = get_leads(mode="all")
         with c1:
             st.subheader("📥 Экспорт")
-            if all_l:
-                df = pd.DataFrame(all_l)
+            if all_leads_backup:
+                df = pd.DataFrame(all_leads_backup)
                 buf_x = io.BytesIO()
                 with pd.ExcelWriter(buf_x, engine='xlsxwriter') as wr: df.to_excel(wr, index=False)
                 st.download_button("📥 Excel (.xlsx)", data=buf_x.getvalue(), file_name=f"leads_{date.today()}.xlsx")
-                csv = df.to_csv(index=False).encode('utf-8')
-                st.download_button("📥 CSV (.csv)", data=csv, file_name=f"leads_{date.today()}.csv", mime='text/csv')
+                st.download_button("📥 CSV (.csv)", data=df.to_csv(index=False).encode('utf-8'), file_name=f"leads_{date.today()}.csv", mime='text/csv')
+                
+                st.divider()
+                st.write("📤 Telegram Бэкап")
+                if st.button("🤖 ОТПРАВИТЬ СЕЙЧАС"):
+                    success, msg = send_telegram_backup(df)
+                    if success: st.success(msg)
+                    else: st.error(msg)
         with c2:
             st.subheader("📦 Архивация")
             if st.session_state.get("role") == "superadmin":
@@ -141,6 +179,7 @@ def main():
                 if len(v) >= 3: add_lead(str(v[1]), str(v[2]), str(v[3]) if len(v)>3 else '', str(v[4]) if len(v)>4 else '', str(v[5]) if len(v)>5 else '', str(v[6]) if len(v)>6 else '', "Excel")
             st.success("Импортировано!"); st.rerun()
 
+    # --- Администрирование ---
     elif choice == "🔑 Администрирование" and st.session_state.get("role") == "superadmin":
         st.header("🔑 Доступы"); new_m = st.text_input("Email:")
         if st.button("Добавить"): add_allowed_email(new_m); st.rerun()
@@ -148,5 +187,4 @@ def main():
             c1, c2 = st.columns([4, 1]); c1.write(f"• {e}")
             if c2.button("Удалить", key=e): delete_allowed_email(e); st.rerun()
 
-if __name__ == "__main__": 
-    main()
+if __name__ == "__main__": main()
