@@ -1,0 +1,48 @@
+name: Scheduled Telegram Backup
+
+on:
+  schedule:
+    # Запуск каждые 48 часов (в 00:00 UTC)
+    - cron: '0 0 */2 * *'
+  workflow_dispatch: # Позволяет запустить бэкап вручную из вкладок GitHub
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: ambassadors/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install pandas psycopg2-binary xlsxwriter requests python-dotenv
+
+      - name: Run backup script
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          TELEGRAM_TOKEN: "8500719540:AAG3KzK7aP3FyZoE-QmRPysKJKEO9KAHWwU"
+          TELEGRAM_CHAT_ID: "-1003793353079"
+        run: |
+          python -c "
+          import os, psycopg2, pandas as pd, io, requests, datetime
+          try:
+              conn = psycopg2.connect(host=os.getenv('DB_HOST'), port=os.getenv('DB_PORT'), database=os.getenv('DB_NAME'), user=os.getenv('DB_USER'), password=os.getenv('DB_PASSWORD'), sslmode='require')
+              df = pd.read_sql('SELECT * FROM leads ORDER BY id DESC', conn)
+              conn.close()
+              output = io.BytesIO()
+              with pd.ExcelWriter(output, engine='xlsxwriter') as wr: df.to_excel(wr, index=False)
+              output.seek(0)
+              msg = f'🤖 AUTO-BACKUP\n👥 Лидов: {len(df)}\n📅 {datetime.datetime.now().strftime(\"%d.%m.%Y\")}'
+              res = requests.post(f'https://api.telegram.org/bot{os.getenv(\"TELEGRAM_TOKEN\")}/sendDocument', data={'chat_id': os.getenv(\"TELEGRAM_CHAT_ID\"), 'caption': msg}, files={'document': (f'auto_backup_{datetime.date.today()}.xlsx', output)})
+              print('Success' if res.status_code == 200 else f'Fail: {res.text}')
+          except Exception as e: print(f'Error: {e}')
+          "
