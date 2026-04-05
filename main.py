@@ -22,11 +22,12 @@ SOURCE_OPTIONS = ["Meta", "Google Landing", "Google Quiz", "Google", "Google lea
 FILTER_SOURCE_MAP = ["Все"] + SOURCE_OPTIONS
 
 COURSE_OPTIONS = ["QA testing", "Programming", "QA testing AIT", "Programming AIT", "Both", "Accounting", "Free course", "Other"]
-# Список ключей для базы
+
+# Ключи цветов для базы данных
 COLOR_KEYS = ["white", "blue", "yellow", "red", "green", "purple", "pink"]
-# Список для фильтров
+# Названия для фильтров
 FILTER_COLOR_MAP = ["Все", "Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"]
-# Словарь для отображения в меню управления
+# Словарь перевода для интерфейса
 STATUS_DISPLAY_MAP = {
     "white": "Белый",
     "blue": "Синий",
@@ -94,14 +95,23 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
             c4, c5, c6 = st.columns(3)
             ue = c4.text_input("Email", row['email'], key=f"e_{row['id']}")
             ut = c5.text_input("Время", row.get('preferred_time',''), key=f"t_{row['id']}")
-            # ИСПРАВЛЕННЫЙ ВЫБОР ЦВЕТА С РУССКИМИ НАЗВАНИЯМИ
+            
+            # --- ИСПРАВЛЕННЫЙ БЛОК ВЫБОРА ЦВЕТА ---
+            try:
+                # Пытаемся найти текущий цвет в списке ключей
+                current_color_idx = COLOR_KEYS.index(row['status_color'])
+            except (ValueError, KeyError):
+                # Если в базе пусто или старый цвет - ставим "Белый" (индекс 0)
+                current_color_idx = 0
+                
             us = c6.selectbox(
                 "Статус (Цвет)", 
                 options=COLOR_KEYS, 
-                index=COLOR_KEYS.index(row['status_color']) if row['status_color'] in COLOR_KEYS else 0,
+                index=current_color_idx,
                 format_func=lambda x: STATUS_DISPLAY_MAP.get(x, x),
                 key=f"s_{row['id']}"
             )
+            # ---------------------------------------
             
             c7, c8 = st.columns(2)
             cur_idx = COURSE_OPTIONS.index(row['course_name']) if row['course_name'] in COURSE_OPTIONS else COURSE_OPTIONS.index("Other")
