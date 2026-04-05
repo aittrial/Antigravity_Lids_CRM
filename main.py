@@ -22,9 +22,20 @@ SOURCE_OPTIONS = ["Meta", "Google Landing", "Google Quiz", "Google", "Google lea
 FILTER_SOURCE_MAP = ["Все"] + SOURCE_OPTIONS
 
 COURSE_OPTIONS = ["QA testing", "Programming", "QA testing AIT", "Programming AIT", "Both", "Accounting", "Free course", "Other"]
-# Исправлено: white теперь в списке, чтобы можно было сбросить цвет
+# Список ключей для базы
 COLOR_KEYS = ["white", "blue", "yellow", "red", "green", "purple", "pink"]
+# Список для фильтров
 FILTER_COLOR_MAP = ["Все", "Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"]
+# Словарь для отображения в меню управления
+STATUS_DISPLAY_MAP = {
+    "white": "Белый",
+    "blue": "Синий",
+    "yellow": "Желтый",
+    "red": "Красный",
+    "green": "Зеленый",
+    "purple": "Фиолетовый",
+    "pink": "Розовый"
+}
 
 def send_telegram_backup(df):
     try:
@@ -35,13 +46,10 @@ def send_telegram_backup(df):
         buf_csv = io.BytesIO()
         df.to_csv(buf_csv, index=False, encoding='utf-8-sig')
         buf_csv.seek(0)
-        
         url = f"https://api.telegram.org/bot{TELE_TOKEN}/sendDocument"
         cap = f"📦 CRM FULL BACKUP\n📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}\n👥 Лидов: {len(df)}"
-        
         requests.post(url, data={'chat_id': TELE_CHAT_ID, 'caption': cap}, files={'document': (f"leads_backup_{date.today()}.xlsx", buf_xls)})
         res2 = requests.post(url, data={'chat_id': TELE_CHAT_ID}, files={'document': (f"leads_backup_{date.today()}.csv", buf_csv)})
-        
         if res2.status_code == 200:
             return True, "Оба файла отправлены в Telegram!"
         return False, f"Ошибка Telegram: {res2.text}"
@@ -65,8 +73,6 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
         
         with st.expander("Управление"):
             c_wa, c_co, c_ar = st.columns(3)
-            
-            # Если есть спец. номер WhatsApp - используем его, иначе основной телефон
             wa_raw = row.get('whatsapp') if row.get('whatsapp') else row['phone']
             p_cl = ''.join(filter(str.isdigit, str(wa_raw)))
             
@@ -83,14 +89,19 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
             c1, c2, c3 = st.columns(3)
             un = c1.text_input("ФИО", row['full_name'], key=f"n_{row['id']}")
             up = c2.text_input("Тел", row['phone'], key=f"p_{row['id']}")
-            # НОВОЕ ПОЛЕ: WhatsApp
             uwa = c3.text_input("WhatsApp (если другой)", row.get('whatsapp', ''), key=f"wa_{row['id']}")
             
             c4, c5, c6 = st.columns(3)
             ue = c4.text_input("Email", row['email'], key=f"e_{row['id']}")
             ut = c5.text_input("Время", row.get('preferred_time',''), key=f"t_{row['id']}")
-            # Теперь можно выбрать white, чтобы сбросить цвет
-            us = c6.selectbox("Статус (Цвет)", COLOR_KEYS, index=COLOR_KEYS.index(row['status_color']), key=f"s_{row['id']}")
+            # ИСПРАВЛЕННЫЙ ВЫБОР ЦВЕТА С РУССКИМИ НАЗВАНИЯМИ
+            us = c6.selectbox(
+                "Статус (Цвет)", 
+                options=COLOR_KEYS, 
+                index=COLOR_KEYS.index(row['status_color']) if row['status_color'] in COLOR_KEYS else 0,
+                format_func=lambda x: STATUS_DISPLAY_MAP.get(x, x),
+                key=f"s_{row['id']}"
+            )
             
             c7, c8 = st.columns(2)
             cur_idx = COURSE_OPTIONS.index(row['course_name']) if row['course_name'] in COURSE_OPTIONS else COURSE_OPTIONS.index("Other")
@@ -163,14 +174,13 @@ def main():
         with st.form("new_lead_form", clear_on_submit=True):
             c1, c2 = st.columns(2); fn, ph = c1.text_input("ФИО"), c2.text_input("Тел")
             c3, c4 = st.columns(2); em, tm = c3.text_input("Email"), c4.text_input("Время")
-            # Добавим WhatsApp и сюда для единообразия
             wa = st.text_input("WhatsApp (если другой)")
             c5, c6 = st.columns(2); crs, src = c5.selectbox("Курс", COURSE_OPTIONS), c6.selectbox("Источник", SOURCE_OPTIONS)
-            stt, cmm = st.selectbox("Статус", COLOR_KEYS), st.text_area("Комментарий")
+            stt = st.selectbox("Статус", COLOR_KEYS, format_func=lambda x: STATUS_DISPLAY_MAP.get(x, x))
+            cmm = st.text_area("Комментарий")
             if st.form_submit_button("Создать"):
                 if fn and ph: 
-                    # Обновляем вызов add_lead, если ты добавил туда whatsapp
-                    add_lead(fn, ph, em, crs, tm, src, cmm, stt, whatsapp=wa); 
+                    add_lead(fn, ph, em, crs, tm, src, cmm, stt, whatsapp=wa)
                     st.success("Добавлено!"); st.rerun()
 
     elif choice == "📂 База данных":
