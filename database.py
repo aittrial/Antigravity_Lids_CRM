@@ -33,6 +33,7 @@ def init_db():
             id SERIAL PRIMARY KEY,
             full_name TEXT,
             phone TEXT,
+            whatsapp TEXT,
             email TEXT,
             course_name TEXT,
             preferred_time TEXT,
@@ -43,9 +44,11 @@ def init_db():
             archived_at TIMESTAMP DEFAULT NULL
         );
         """)
+        # Гарантируем наличие всех колонок
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL;")
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS preferred_time TEXT;")
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS source TEXT;")
+        cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS whatsapp TEXT;")
         conn.commit()
     finally:
         conn.close()
@@ -83,15 +86,15 @@ def archive_single_lead(lead_id):
     finally:
         conn.close()
 
-def add_lead(full_name, phone, email='', course_name='', preferred_time='', source='', comment='', status_color='white'):
+def add_lead(full_name, phone, email='', course_name='', preferred_time='', source='', comment='', status_color='white', whatsapp=''):
     conn = get_connection()
     if not conn: return
     try:
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO leads (full_name, phone, email, course_name, preferred_time, source, comment, status_color)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (str(full_name or ""), str(phone or ""), str(email or ""), 
+            INSERT INTO leads (full_name, phone, whatsapp, email, course_name, preferred_time, source, comment, status_color)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (str(full_name or ""), str(phone or ""), str(whatsapp or ""), str(email or ""), 
               str(course_name or ""), str(preferred_time or ""), str(source or ""), str(comment or ""), str(status_color or "white")))
         conn.commit()
     finally:
@@ -119,23 +122,21 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
             else:
                 query += " AND archived_at IS NOT NULL"
             limit_sql = ""
-        else: # "all" для аналитики и бэкапа
+        else:
             limit_sql = ""
 
-        # Фильтр по цвету
         if status_filter and status_filter != "Все":
             status_map = {"Белый": "white", "Синий": "blue", "Желтый": "yellow", "Красный": "red", "Зеленый": "green", "Фиолетовый": "purple", "Розовый": "pink"}
             query += " AND status_color = %s"
             params.append(status_map.get(status_filter, "white"))
 
-        # Фильтр по источнику
         if source_filter and source_filter != "Все":
             query += " AND source = %s"
             params.append(source_filter)
 
         if search_query:
-            query += " AND (full_name ILIKE %s OR phone ILIKE %s)"
-            params.extend([f"%{search_query}%", f"%{search_query}%"])
+            query += " AND (full_name ILIKE %s OR phone ILIKE %s OR whatsapp ILIKE %s)"
+            params.extend([f"%{search_query}%", f"%{search_query}%", f"%{search_query}%"])
         
         if start_date:
             query += " AND created_at >= %s"
@@ -156,6 +157,7 @@ def update_lead(lead_id, **kwargs):
     if not conn: return
     try:
         cur = conn.cursor()
+        if not kwargs: return
         set_clause = ", ".join([f"{k} = %s" for k in kwargs.keys()])
         params = list(kwargs.values()) + [lead_id]
         cur.execute(f"UPDATE leads SET {set_clause} WHERE id = %s", params)
