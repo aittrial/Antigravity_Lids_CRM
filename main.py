@@ -23,16 +23,20 @@ FILTER_SOURCE_MAP = ["Все"] + SOURCE_OPTIONS
 
 COURSE_OPTIONS = ["QA testing", "Programming", "QA testing AIT", "Programming AIT", "Both", "Accounting", "Free course", "Other"]
 
-# --- ЦВЕТА (ФИНАЛЬНАЯ ВЕРСИЯ) ---
-# Ключи для базы данных
+# --- ЦВЕТА (ФИНАЛЬНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ) ---
 COLOR_KEYS = ["white", "blue", "yellow", "red", "green", "purple", "pink"]
-# Названия для фильтров вверху страницы
 FILTER_COLOR_MAP = ["Все", "Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"]
 
-# Прямой маппинг для селектбокса (чтобы не было ошибок с Белым)
-STATUS_OPTIONS_RU = ["Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"]
-RU_TO_KEY = dict(zip(STATUS_OPTIONS_RU, COLOR_KEYS))
-KEY_TO_RU = dict(zip(COLOR_KEYS, STATUS_OPTIONS_RU))
+# Карта цветов для селектбокса
+STATUS_MAP = {
+    "white": "Белый",
+    "blue": "Синий",
+    "yellow": "Желтый",
+    "red": "Красный",
+    "green": "Зеленый",
+    "purple": "Фиолетовый",
+    "pink": "Розовый"
+}
 
 def send_telegram_backup(df):
     try:
@@ -92,18 +96,30 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
             ue = c4.text_input("Email", row['email'], key=f"e_{row['id']}")
             ut = c5.text_input("Время", row.get('preferred_time',''), key=f"t_{row['id']}")
             
-            # --- ИСПРАВЛЕННЫЙ ВЫБОР ЦВЕТА ---
-            current_status_key = row['status_color'] if row['status_color'] in COLOR_KEYS else "white"
-            current_status_ru = KEY_TO_RU.get(current_status_key, "Белый")
+            # --- РЕШЕНИЕ ПРОБЛЕМЫ С БЕЛЫМ ЦВЕТОМ ---
+            # Берем текущий цвет из базы, если его нет в списке - ставим white
+            current_color = row['status_color'] if row['status_color'] in COLOR_KEYS else "white"
             
-            us_ru = c6.selectbox(
+            # Мы используем список РУССКИХ названий для отображения
+            status_ru_options = ["Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"]
+            # Находим индекс текущего цвета в русском списке через маппинг
+            current_ru_val = STATUS_MAP.get(current_color, "Белый")
+            try:
+                def_idx = status_ru_options.index(current_ru_val)
+            except:
+                def_idx = 0
+
+            chosen_ru = c6.selectbox(
                 "Статус (Цвет)", 
-                options=STATUS_OPTIONS_RU, 
-                index=STATUS_OPTIONS_RU.index(current_status_ru),
+                options=status_ru_options, 
+                index=def_idx,
                 key=f"s_{row['id']}"
             )
-            us_key = RU_TO_KEY[us_ru] # Переводим обратно в английский для базы
-            # -------------------------------
+            
+            # Конвертируем обратно в английский ключ для сохранения в базу
+            inv_map = {v: k for k, v in STATUS_MAP.items()}
+            us_key = inv_map.get(chosen_ru, "white")
+            # ----------------------------------------
             
             c7, c8 = st.columns(2)
             cur_idx = COURSE_OPTIONS.index(row['course_name']) if row['course_name'] in COURSE_OPTIONS else COURSE_OPTIONS.index("Other")
@@ -179,13 +195,14 @@ def main():
             wa = st.text_input("WhatsApp (если другой)")
             c5, c6 = st.columns(2); crs, src = c5.selectbox("Курс", COURSE_OPTIONS), c6.selectbox("Источник", SOURCE_OPTIONS)
             
-            # Новый лид тоже на русском
-            stt_ru = st.selectbox("Статус", STATUS_OPTIONS_RU)
+            # Русский список для новых лидов
+            new_status_ru = st.selectbox("Статус", ["Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"])
+            inv_map = {v: k for k, v in STATUS_MAP.items()}
             cmm = st.text_area("Комментарий")
             
             if st.form_submit_button("Создать"):
                 if fn and ph: 
-                    add_lead(fn, ph, em, crs, tm, src, cmm, RU_TO_KEY[stt_ru], whatsapp=wa)
+                    add_lead(fn, ph, em, crs, tm, src, cmm, inv_map.get(new_status_ru, "white"), whatsapp=wa)
                     st.success("Добавлено!"); st.rerun()
 
     elif choice == "📂 База данных":
