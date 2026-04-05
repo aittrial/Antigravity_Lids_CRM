@@ -23,20 +23,16 @@ FILTER_SOURCE_MAP = ["Все"] + SOURCE_OPTIONS
 
 COURSE_OPTIONS = ["QA testing", "Programming", "QA testing AIT", "Programming AIT", "Both", "Accounting", "Free course", "Other"]
 
-# Ключи цветов для базы данных
+# --- ЦВЕТА (ФИНАЛЬНАЯ ВЕРСИЯ) ---
+# Ключи для базы данных
 COLOR_KEYS = ["white", "blue", "yellow", "red", "green", "purple", "pink"]
-# Названия для фильтров
+# Названия для фильтров вверху страницы
 FILTER_COLOR_MAP = ["Все", "Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"]
-# Словарь перевода для интерфейса
-STATUS_DISPLAY_MAP = {
-    "white": "Белый",
-    "blue": "Синий",
-    "yellow": "Желтый",
-    "red": "Красный",
-    "green": "Зеленый",
-    "purple": "Фиолетовый",
-    "pink": "Розовый"
-}
+
+# Прямой маппинг для селектбокса (чтобы не было ошибок с Белым)
+STATUS_OPTIONS_RU = ["Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"]
+RU_TO_KEY = dict(zip(STATUS_OPTIONS_RU, COLOR_KEYS))
+KEY_TO_RU = dict(zip(COLOR_KEYS, STATUS_OPTIONS_RU))
 
 def send_telegram_backup(df):
     try:
@@ -96,22 +92,18 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
             ue = c4.text_input("Email", row['email'], key=f"e_{row['id']}")
             ut = c5.text_input("Время", row.get('preferred_time',''), key=f"t_{row['id']}")
             
-            # --- ИСПРАВЛЕННЫЙ БЛОК ВЫБОРА ЦВЕТА ---
-            try:
-                # Пытаемся найти текущий цвет в списке ключей
-                current_color_idx = COLOR_KEYS.index(row['status_color'])
-            except (ValueError, KeyError):
-                # Если в базе пусто или старый цвет - ставим "Белый" (индекс 0)
-                current_color_idx = 0
-                
-            us = c6.selectbox(
+            # --- ИСПРАВЛЕННЫЙ ВЫБОР ЦВЕТА ---
+            current_status_key = row['status_color'] if row['status_color'] in COLOR_KEYS else "white"
+            current_status_ru = KEY_TO_RU.get(current_status_key, "Белый")
+            
+            us_ru = c6.selectbox(
                 "Статус (Цвет)", 
-                options=COLOR_KEYS, 
-                index=current_color_idx,
-                format_func=lambda x: STATUS_DISPLAY_MAP.get(x, x),
+                options=STATUS_OPTIONS_RU, 
+                index=STATUS_OPTIONS_RU.index(current_status_ru),
                 key=f"s_{row['id']}"
             )
-            # ---------------------------------------
+            us_key = RU_TO_KEY[us_ru] # Переводим обратно в английский для базы
+            # -------------------------------
             
             c7, c8 = st.columns(2)
             cur_idx = COURSE_OPTIONS.index(row['course_name']) if row['course_name'] in COURSE_OPTIONS else COURSE_OPTIONS.index("Other")
@@ -127,7 +119,7 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
             
             if st.button("💾 Сохранить", key=f"sv_{row['id']}"):
                 update_lead(row['id'], full_name=un, phone=up, email=ue, course_name=curr_c, 
-                            preferred_time=ut, status_color=us, comment=ucom, source=curr_src, whatsapp=uwa)
+                            preferred_time=ut, status_color=us_key, comment=ucom, source=curr_src, whatsapp=uwa)
                 st.rerun()
 
 def main():
@@ -186,11 +178,14 @@ def main():
             c3, c4 = st.columns(2); em, tm = c3.text_input("Email"), c4.text_input("Время")
             wa = st.text_input("WhatsApp (если другой)")
             c5, c6 = st.columns(2); crs, src = c5.selectbox("Курс", COURSE_OPTIONS), c6.selectbox("Источник", SOURCE_OPTIONS)
-            stt = st.selectbox("Статус", COLOR_KEYS, format_func=lambda x: STATUS_DISPLAY_MAP.get(x, x))
+            
+            # Новый лид тоже на русском
+            stt_ru = st.selectbox("Статус", STATUS_OPTIONS_RU)
             cmm = st.text_area("Комментарий")
+            
             if st.form_submit_button("Создать"):
                 if fn and ph: 
-                    add_lead(fn, ph, em, crs, tm, src, cmm, stt, whatsapp=wa)
+                    add_lead(fn, ph, em, crs, tm, src, cmm, RU_TO_KEY[stt_ru], whatsapp=wa)
                     st.success("Добавлено!"); st.rerun()
 
     elif choice == "📂 База данных":
