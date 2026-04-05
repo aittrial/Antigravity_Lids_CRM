@@ -23,12 +23,12 @@ FILTER_SOURCE_MAP = ["Все"] + SOURCE_OPTIONS
 
 COURSE_OPTIONS = ["QA testing", "Programming", "QA testing AIT", "Programming AIT", "Both", "Accounting", "Free course", "Other"]
 
-# --- ЦВЕТА (ФИНАЛЬНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ) ---
+# --- ЦВЕТА (ЖЕЛЕЗНАЯ ЛОГИКА) ---
 COLOR_KEYS = ["white", "blue", "yellow", "red", "green", "purple", "pink"]
 FILTER_COLOR_MAP = ["Все", "Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"]
 
-# Карта цветов для селектбокса
-STATUS_MAP = {
+# Карта для отображения
+STATUS_MAP_RU = {
     "white": "Белый",
     "blue": "Синий",
     "yellow": "Желтый",
@@ -66,13 +66,14 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
         st.info("По заданным фильтрам ничего не найдено.")
         return
     for i, row in enumerate(leads_data):
+        lead_id = row['id']
         color = get_status_color(row['status_color'])
         date_s = row['created_at'].strftime("%d.%m.%Y %H:%M")
         pref_time = row.get('preferred_time', '---')
         
         st.markdown(f'<div style="background-color:{color}; border-radius:10px; padding:12px; margin-bottom:10px; border:2px solid #444; color: black !important;"><b style="color: black !important; font-size: 14px;">#{start_order+i} | 📅 {date_s} | 🕒 {pref_time} | {row["full_name"]} | {row["phone"]}</b></div>', unsafe_allow_html=True)
         
-        with st.expander("Управление"):
+        with st.expander(f"Управление #{lead_id}"):
             c_wa, c_co, c_ar = st.columns(3)
             wa_raw = row.get('whatsapp') if row.get('whatsapp') else row['phone']
             p_cl = ''.join(filter(str.isdigit, str(wa_raw)))
@@ -82,59 +83,51 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
             with c_co: 
                 st.code(f"ФИО: {row['full_name']}\nТел: {row['phone']}\nWA: {row.get('whatsapp','')}\nКурс: {row['course_name']}", language=None)
             with c_ar:
-                if can_archive and st.button("📦 В архив", key=f"arch_btn_{row['id']}"):
-                    archive_single_lead(row['id']); st.rerun()
+                if can_archive and st.button("📦 В архив", key=f"arch_{lead_id}"):
+                    archive_single_lead(lead_id); st.rerun()
             
             st.divider()
             
             c1, c2, c3 = st.columns(3)
-            un = c1.text_input("ФИО", row['full_name'], key=f"n_{row['id']}")
-            up = c2.text_input("Тел", row['phone'], key=f"p_{row['id']}")
-            uwa = c3.text_input("WhatsApp (если другой)", row.get('whatsapp', ''), key=f"wa_{row['id']}")
+            un = c1.text_input("ФИО", row['full_name'], key=f"name_input_{lead_id}")
+            up = c2.text_input("Тел", row['phone'], key=f"phone_input_{lead_id}")
+            uwa = c3.text_input("WhatsApp (если другой)", row.get('whatsapp', ''), key=f"wa_input_{lead_id}")
             
             c4, c5, c6 = st.columns(3)
-            ue = c4.text_input("Email", row['email'], key=f"e_{row['id']}")
-            ut = c5.text_input("Время", row.get('preferred_time',''), key=f"t_{row['id']}")
+            ue = c4.text_input("Email", row['email'], key=f"email_input_{lead_id}")
+            ut = c5.text_input("Время", row.get('preferred_time',''), key=f"time_input_{lead_id}")
             
-            # --- РЕШЕНИЕ ПРОБЛЕМЫ С БЕЛЫМ ЦВЕТОМ ---
-            # Берем текущий цвет из базы, если его нет в списке - ставим white
-            current_color = row['status_color'] if row['status_color'] in COLOR_KEYS else "white"
+            # РЕШЕНИЕ: используем список русских строк напрямую, чтобы Streamlit не терял Белый
+            ru_options = ["Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"]
+            current_key = row['status_color'] if row['status_color'] in COLOR_KEYS else "white"
+            current_ru = STATUS_MAP_RU.get(current_key, "Белый")
             
-            # Мы используем список РУССКИХ названий для отображения
-            status_ru_options = ["Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"]
-            # Находим индекс текущего цвета в русском списке через маппинг
-            current_ru_val = STATUS_MAP.get(current_color, "Белый")
-            try:
-                def_idx = status_ru_options.index(current_ru_val)
-            except:
-                def_idx = 0
-
+            # Уникальный ключ для селектбокса решает проблему выпадения пунктов
             chosen_ru = c6.selectbox(
                 "Статус (Цвет)", 
-                options=status_ru_options, 
-                index=def_idx,
-                key=f"s_{row['id']}"
+                options=ru_options, 
+                index=ru_options.index(current_ru),
+                key=f"color_select_{lead_id}"
             )
             
-            # Конвертируем обратно в английский ключ для сохранения в базу
-            inv_map = {v: k for k, v in STATUS_MAP.items()}
-            us_key = inv_map.get(chosen_ru, "white")
-            # ----------------------------------------
+            # Обратный маппинг для сохранения
+            rev_map = {v: k for k, v in STATUS_MAP_RU.items()}
+            us_key = rev_map.get(chosen_ru, "white")
             
             c7, c8 = st.columns(2)
             cur_idx = COURSE_OPTIONS.index(row['course_name']) if row['course_name'] in COURSE_OPTIONS else COURSE_OPTIONS.index("Other")
-            c_sel = c7.selectbox("Курс", COURSE_OPTIONS, index=cur_idx, key=f"cs_{row['id']}")
-            curr_c = c7.text_input("Уточните курс", row['course_name'], key=f"cm_{row['id']}") if c_sel == "Other" else c_sel
+            c_sel = c7.selectbox("Курс", COURSE_OPTIONS, index=cur_idx, key=f"course_sel_{lead_id}")
+            curr_c = c7.text_input("Уточните курс", row['course_name'], key=f"course_manual_{lead_id}") if c_sel == "Other" else c_sel
             
             src_val = row.get('source', 'Other')
             src_idx = SOURCE_OPTIONS.index(src_val) if src_val in SOURCE_OPTIONS else SOURCE_OPTIONS.index("Other")
-            src_sel = c8.selectbox("Источник", SOURCE_OPTIONS, index=src_idx, key=f"srcs_{row['id']}")
-            curr_src = c8.text_input("Уточните источник", src_val, key=f"srcm_{row['id']}") if src_sel == "Other" else src_sel
+            src_sel = c8.selectbox("Источник", SOURCE_OPTIONS, index=src_idx, key=f"source_sel_{lead_id}")
+            curr_src = c8.text_input("Уточните источник", src_val, key=f"source_manual_{lead_id}") if src_sel == "Other" else src_sel
             
-            ucom = st.text_area("Комментарий", row['comment'] or "", key=f"com_{row['id']}", height=100)
+            ucom = st.text_area("Комментарий", row['comment'] or "", key=f"comment_area_{lead_id}", height=100)
             
-            if st.button("💾 Сохранить", key=f"sv_{row['id']}"):
-                update_lead(row['id'], full_name=un, phone=up, email=ue, course_name=curr_c, 
+            if st.button("💾 Сохранить", key=f"save_btn_{lead_id}"):
+                update_lead(lead_id, full_name=un, phone=up, email=ue, course_name=curr_c, 
                             preferred_time=ut, status_color=us_key, comment=ucom, source=curr_src, whatsapp=uwa)
                 st.rerun()
 
@@ -195,14 +188,13 @@ def main():
             wa = st.text_input("WhatsApp (если другой)")
             c5, c6 = st.columns(2); crs, src = c5.selectbox("Курс", COURSE_OPTIONS), c6.selectbox("Источник", SOURCE_OPTIONS)
             
-            # Русский список для новых лидов
-            new_status_ru = st.selectbox("Статус", ["Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"])
-            inv_map = {v: k for k, v in STATUS_MAP.items()}
+            stt_ru = st.selectbox("Статус", ["Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"])
+            rev_map = {v: k for k, v in STATUS_MAP_RU.items()}
             cmm = st.text_area("Комментарий")
             
             if st.form_submit_button("Создать"):
                 if fn and ph: 
-                    add_lead(fn, ph, em, crs, tm, src, cmm, inv_map.get(new_status_ru, "white"), whatsapp=wa)
+                    add_lead(fn, ph, em, crs, tm, src, cmm, rev_map.get(stt_ru, "white"), whatsapp=wa)
                     st.success("Добавлено!"); st.rerun()
 
     elif choice == "📂 База данных":
