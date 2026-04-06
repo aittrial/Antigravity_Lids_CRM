@@ -22,21 +22,8 @@ SOURCE_OPTIONS = ["Meta", "Google Landing", "Google Quiz", "Google", "Google lea
 FILTER_SOURCE_MAP = ["Все"] + SOURCE_OPTIONS
 
 COURSE_OPTIONS = ["QA testing", "Programming", "QA testing AIT", "Programming AIT", "Both", "Accounting", "Free course", "Other"]
-
-# --- ЦВЕТА (ЖЕЛЕЗНАЯ ЛОГИКА) ---
 COLOR_KEYS = ["white", "blue", "yellow", "red", "green", "purple", "pink"]
 FILTER_COLOR_MAP = ["Все", "Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"]
-
-# Карта для отображения
-STATUS_MAP_RU = {
-    "white": "Белый",
-    "blue": "Синий",
-    "yellow": "Желтый",
-    "red": "Красный",
-    "green": "Зеленый",
-    "purple": "Фиолетовый",
-    "pink": "Розовый"
-}
 
 def send_telegram_backup(df):
     try:
@@ -66,70 +53,35 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
         st.info("По заданным фильтрам ничего не найдено.")
         return
     for i, row in enumerate(leads_data):
-        lead_id = row['id']
         color = get_status_color(row['status_color'])
         date_s = row['created_at'].strftime("%d.%m.%Y %H:%M")
         pref_time = row.get('preferred_time', '---')
-        
         st.markdown(f'<div style="background-color:{color}; border-radius:10px; padding:12px; margin-bottom:10px; border:2px solid #444; color: black !important;"><b style="color: black !important; font-size: 14px;">#{start_order+i} | 📅 {date_s} | 🕒 {pref_time} | {row["full_name"]} | {row["phone"]}</b></div>', unsafe_allow_html=True)
-        
-        with st.expander(f"Управление #{lead_id}"):
+        with st.expander("Управление"):
             c_wa, c_co, c_ar = st.columns(3)
             wa_raw = row.get('whatsapp') if row.get('whatsapp') else row['phone']
             p_cl = ''.join(filter(str.isdigit, str(wa_raw)))
-            
-            with c_wa: 
-                st.markdown(f'''<a href="https://wa.me/{p_cl}" target="_blank"><button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; width:100%;">💬 WhatsApp</button></a>''', unsafe_allow_html=True)
-            with c_co: 
-                st.code(f"ФИО: {row['full_name']}\nТел: {row['phone']}\nWA: {row.get('whatsapp','')}\nКурс: {row['course_name']}", language=None)
+            with c_wa: st.markdown(f'''<a href="https://wa.me/{p_cl}" target="_blank"><button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; width:100%;">💬 WhatsApp</button></a>''', unsafe_allow_html=True)
+            with c_co: st.code(f"ФИО: {row['full_name']}\nТел: {row['phone']}\nWA: {row.get('whatsapp','')}\nКурс: {row['course_name']}", language=None)
             with c_ar:
-                if can_archive and st.button("📦 В архив", key=f"arch_{lead_id}"):
-                    archive_single_lead(lead_id); st.rerun()
-            
+                if can_archive and st.button("📦 В архив", key=f"arch_btn_{row['id']}"):
+                    archive_single_lead(row['id']); st.rerun()
             st.divider()
-            
             c1, c2, c3 = st.columns(3)
-            un = c1.text_input("ФИО", row['full_name'], key=f"name_input_{lead_id}")
-            up = c2.text_input("Тел", row['phone'], key=f"phone_input_{lead_id}")
-            uwa = c3.text_input("WhatsApp (если другой)", row.get('whatsapp', ''), key=f"wa_input_{lead_id}")
-            
+            un, up, uwa = c1.text_input("ФИО", row['full_name'], key=f"n_{row['id']}"), c2.text_input("Тел", row['phone'], key=f"p_{row['id']}"), c3.text_input("WhatsApp", row.get('whatsapp', ''), key=f"wa_{row['id']}")
             c4, c5, c6 = st.columns(3)
-            ue = c4.text_input("Email", row['email'], key=f"email_input_{lead_id}")
-            ut = c5.text_input("Время", row.get('preferred_time',''), key=f"time_input_{lead_id}")
-            
-            # РЕШЕНИЕ: используем список русских строк напрямую, чтобы Streamlit не терял Белый
-            ru_options = ["Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"]
-            current_key = row['status_color'] if row['status_color'] in COLOR_KEYS else "white"
-            current_ru = STATUS_MAP_RU.get(current_key, "Белый")
-            
-            # Уникальный ключ для селектбокса решает проблему выпадения пунктов
-            chosen_ru = c6.selectbox(
-                "Статус (Цвет)", 
-                options=ru_options, 
-                index=ru_options.index(current_ru),
-                key=f"color_select_{lead_id}"
-            )
-            
-            # Обратный маппинг для сохранения
-            rev_map = {v: k for k, v in STATUS_MAP_RU.items()}
-            us_key = rev_map.get(chosen_ru, "white")
-            
+            ue, ut, us = c4.text_input("Email", row['email'], key=f"e_{row['id']}"), c5.text_input("Время", row.get('preferred_time',''), key=f"t_{row['id']}"), c6.selectbox("Статус", COLOR_KEYS, index=COLOR_KEYS.index(row['status_color']) if row['status_color'] in COLOR_KEYS else 0, key=f"s_{row['id']}")
             c7, c8 = st.columns(2)
             cur_idx = COURSE_OPTIONS.index(row['course_name']) if row['course_name'] in COURSE_OPTIONS else COURSE_OPTIONS.index("Other")
-            c_sel = c7.selectbox("Курс", COURSE_OPTIONS, index=cur_idx, key=f"course_sel_{lead_id}")
-            curr_c = c7.text_input("Уточните курс", row['course_name'], key=f"course_manual_{lead_id}") if c_sel == "Other" else c_sel
-            
+            c_sel = c7.selectbox("Курс", COURSE_OPTIONS, index=cur_idx, key=f"cs_{row['id']}")
+            curr_c = c7.text_input("Уточните курс", row['course_name'], key=f"cm_{row['id']}") if c_sel == "Other" else c_sel
             src_val = row.get('source', 'Other')
             src_idx = SOURCE_OPTIONS.index(src_val) if src_val in SOURCE_OPTIONS else SOURCE_OPTIONS.index("Other")
-            src_sel = c8.selectbox("Источник", SOURCE_OPTIONS, index=src_idx, key=f"source_sel_{lead_id}")
-            curr_src = c8.text_input("Уточните источник", src_val, key=f"source_manual_{lead_id}") if src_sel == "Other" else src_sel
-            
-            ucom = st.text_area("Комментарий", row['comment'] or "", key=f"comment_area_{lead_id}", height=100)
-            
-            if st.button("💾 Сохранить", key=f"save_btn_{lead_id}"):
-                update_lead(lead_id, full_name=un, phone=up, email=ue, course_name=curr_c, 
-                            preferred_time=ut, status_color=us_key, comment=ucom, source=curr_src, whatsapp=uwa)
-                st.rerun()
+            src_sel = c8.selectbox("Источник", SOURCE_OPTIONS, index=src_idx, key=f"srcs_{row['id']}")
+            curr_src = c8.text_input("Уточните источник", src_val, key=f"srcm_{row['id']}") if src_sel == "Other" else src_sel
+            ucom = st.text_area("Комментарий", row['comment'] or "", key=f"com_{row['id']}", height=100)
+            if st.button("💾 Сохранить", key=f"sv_{row['id']}"):
+                update_lead(row['id'], full_name=un, phone=up, email=ue, course_name=curr_c, preferred_time=ut, status_color=us, comment=ucom, source=curr_src, whatsapp=uwa); st.rerun()
 
 def main():
     if not check_password(): return
@@ -139,6 +91,7 @@ def main():
     choice = st.sidebar.selectbox("Навигация", menu)
     if st.sidebar.button("🚪 Выход"): logout()
 
+    # --- Аналитика ---
     if choice == "📊 Аналитика":
         st.header("📊 Аналитика")
         df_all = pd.DataFrame(get_leads(mode="all"))
@@ -149,23 +102,33 @@ def main():
             m[4].metric("🟢 Возврат", len(df_all[df_all['status_color']=='green'])); m[5].metric("🟣 Офис", len(df_all[df_all['status_color']=='purple']))
             m[6].metric("💗 Работа 2", len(df_all[df_all['status_color']=='pink']))
             st.divider()
-            last_w = date.today() - timedelta(days=7)
-            cl, cr = st.columns(2)
-            with cl:
+            
+            # НОВЫЙ ГРАФИК ПО ИСТОЧНИКАМ
+            col_src, col_dyn = st.columns(2)
+            with col_src:
+                src_counts = df_all['source'].value_counts().reset_index()
+                src_counts.columns = ['Источник', 'Кол-во']
+                fig_pie = px.pie(src_counts, values='Кол-во', names='Источник', title="Распределение по источникам (все время)", hole=0.4)
+                st.plotly_chart(fig_pie, use_container_width=True)
+            
+            with col_dyn:
+                last_w = date.today() - timedelta(days=7)
                 df_act = pd.DataFrame(get_leads(mode="active"))
                 if not df_act.empty:
                     df_act['day'] = pd.to_datetime(df_act['created_at']).dt.date
                     dyn = df_act[df_act['day'] >= last_w].groupby('day').size().reset_index(name='лидов')
                     st.plotly_chart(px.area(dyn, x='day', y='лидов', title="Динамика (7 дней)"), use_container_width=True)
-            with cr:
-                df_week = df_all[pd.to_datetime(df_all['created_at']).dt.date >= last_w]
-                if not df_week.empty:
-                    st_counts = df_week[df_week['status_color'] != 'white']['status_color'].value_counts().reset_index()
-                    st_counts.columns = ['Статус', 'Кол-во']
-                    st.plotly_chart(px.bar(st_counts, x='Кол-во', y='Статус', orientation='h', color='Статус', color_discrete_map={'blue':'#B3D7FF','yellow':'#FFF59D','red':'#FFAB91','green':'#C8E6C9','purple':'#E1BEE7','pink':'#F8BBD0'}, template="plotly_white"), use_container_width=True)
-                    st.markdown(f"⚪ **Белые за неделю:** `{len(df_week[df_week['status_color'] == 'white'])}`")
+            
+            st.divider()
+            # Статистика статусов за неделю
+            df_week = df_all[pd.to_datetime(df_all['created_at']).dt.date >= (date.today() - timedelta(days=7))]
+            if not df_week.empty:
+                st_counts = df_week[df_week['status_color'] != 'white']['status_color'].value_counts().reset_index()
+                st_counts.columns = ['Статус', 'Кол-во']
+                st.plotly_chart(px.bar(st_counts, x='Кол-во', y='Статус', orientation='h', color='Статус', color_discrete_map={'blue':'#B3D7FF','yellow':'#FFF59D','red':'#FFAB91','green':'#C8E6C9','purple':'#E1BEE7','pink':'#F8BBD0'}, title="Статусы за последние 7 дней"), use_container_width=True)
         else: st.info("База пуста")
 
+    # --- Список лидов ---
     elif choice == "👥 Список лидов":
         st.header("👥 Лиды")
         f1, f2, f3, f4 = st.columns([2, 1.2, 1, 1])
@@ -180,6 +143,7 @@ def main():
                 pg = st.number_input("Страница", 1, max(1, len(arch)//50 + 1))
                 render_leads_list(arch[(pg-1)*50 : pg*50])
 
+    # --- Новый лид ---
     elif choice == "➕ Новый лид":
         st.header("➕ Новый лид")
         with st.form("new_lead_form", clear_on_submit=True):
@@ -187,16 +151,11 @@ def main():
             c3, c4 = st.columns(2); em, tm = c3.text_input("Email"), c4.text_input("Время")
             wa = st.text_input("WhatsApp (если другой)")
             c5, c6 = st.columns(2); crs, src = c5.selectbox("Курс", COURSE_OPTIONS), c6.selectbox("Источник", SOURCE_OPTIONS)
-            
-            stt_ru = st.selectbox("Статус", ["Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"])
-            rev_map = {v: k for k, v in STATUS_MAP_RU.items()}
-            cmm = st.text_area("Комментарий")
-            
+            stt, cmm = st.selectbox("Статус", COLOR_KEYS), st.text_area("Комментарий")
             if st.form_submit_button("Создать"):
-                if fn and ph: 
-                    add_lead(fn, ph, em, crs, tm, src, cmm, rev_map.get(stt_ru, "white"), whatsapp=wa)
-                    st.success("Добавлено!"); st.rerun()
+                if fn and ph: add_lead(fn, ph, em, crs, tm, src, cmm, stt, whatsapp=wa); st.success("Добавлено!"); st.rerun()
 
+    # --- Остальные разделы без изменений ---
     elif choice == "📂 База данных":
         st.header("📂 Управление базой")
         c1, c2, c3 = st.columns(3)
