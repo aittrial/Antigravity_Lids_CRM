@@ -103,32 +103,41 @@ def main():
             m[6].metric("💗 Работа 2", len(df_all[df_all['status_color']=='pink']))
             st.divider()
             
-            # НОВЫЙ ГРАФИК ПО ИСТОЧНИКАМ
+            # --- ФИЛЬТРУЕМ ДАННЫЕ ЗА НЕДЕЛЮ ДЛЯ ГРАФИКОВ ---
+            last_w_date = date.today() - timedelta(days=7)
+            df_all['created_at_dt'] = pd.to_datetime(df_all['created_at']).dt.date
+            df_week = df_all[df_all['created_at_dt'] >= last_w_date]
+
             col_src, col_dyn = st.columns(2)
+            
             with col_src:
-                src_counts = df_all['source'].value_counts().reset_index()
-                src_counts.columns = ['Источник', 'Кол-во']
-                fig_pie = px.pie(src_counts, values='Кол-во', names='Источник', title="Распределение по источникам (все время)", hole=0.4)
-                st.plotly_chart(fig_pie, use_container_width=True)
+                if not df_week.empty:
+                    src_counts = df_week['source'].value_counts().reset_index()
+                    src_counts.columns = ['Источник', 'Кол-во']
+                    fig_pie = px.pie(src_counts, values='Кол-во', names='Источник', 
+                                    title="Источники лидов (за последние 7 дней)", hole=0.4)
+                    st.plotly_chart(fig_pie, use_container_width=True)
+                else:
+                    st.info("Нет данных по источникам за последние 7 дней.")
             
             with col_dyn:
-                last_w = date.today() - timedelta(days=7)
                 df_act = pd.DataFrame(get_leads(mode="active"))
                 if not df_act.empty:
                     df_act['day'] = pd.to_datetime(df_act['created_at']).dt.date
-                    dyn = df_act[df_act['day'] >= last_w].groupby('day').size().reset_index(name='лидов')
-                    st.plotly_chart(px.area(dyn, x='day', y='лидов', title="Динамика (7 дней)"), use_container_width=True)
+                    dyn = df_act[df_act['day'] >= last_w_date].groupby('day').size().reset_index(name='лидов')
+                    st.plotly_chart(px.area(dyn, x='day', y='лидов', title="Динамика новых лидов (7 дней)"), use_container_width=True)
             
             st.divider()
             # Статистика статусов за неделю
-            df_week = df_all[pd.to_datetime(df_all['created_at']).dt.date >= (date.today() - timedelta(days=7))]
             if not df_week.empty:
                 st_counts = df_week[df_week['status_color'] != 'white']['status_color'].value_counts().reset_index()
                 st_counts.columns = ['Статус', 'Кол-во']
-                st.plotly_chart(px.bar(st_counts, x='Кол-во', y='Статус', orientation='h', color='Статус', color_discrete_map={'blue':'#B3D7FF','yellow':'#FFF59D','red':'#FFAB91','green':'#C8E6C9','purple':'#E1BEE7','pink':'#F8BBD0'}, title="Статусы за последние 7 дней"), use_container_width=True)
+                st.plotly_chart(px.bar(st_counts, x='Кол-во', y='Статус', orientation='h', color='Статус', 
+                                     color_discrete_map={'blue':'#B3D7FF','yellow':'#FFF59D','red':'#FFAB91','green':'#C8E6C9','purple':'#E1BEE7','pink':'#F8BBD0'}, 
+                                     title="Работа по статусам (за последние 7 дней)"), use_container_width=True)
         else: st.info("База пуста")
 
-    # --- Список лидов ---
+    # --- Остальные разделы без изменений ---
     elif choice == "👥 Список лидов":
         st.header("👥 Лиды")
         f1, f2, f3, f4 = st.columns([2, 1.2, 1, 1])
@@ -143,7 +152,6 @@ def main():
                 pg = st.number_input("Страница", 1, max(1, len(arch)//50 + 1))
                 render_leads_list(arch[(pg-1)*50 : pg*50])
 
-    # --- Новый лид ---
     elif choice == "➕ Новый лид":
         st.header("➕ Новый лид")
         with st.form("new_lead_form", clear_on_submit=True):
@@ -155,7 +163,6 @@ def main():
             if st.form_submit_button("Создать"):
                 if fn and ph: add_lead(fn, ph, em, crs, tm, src, cmm, stt, whatsapp=wa); st.success("Добавлено!"); st.rerun()
 
-    # --- Остальные разделы без изменений ---
     elif choice == "📂 База данных":
         st.header("📂 Управление базой")
         c1, c2, c3 = st.columns(3)
