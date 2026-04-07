@@ -26,7 +26,7 @@ def init_db():
     if not conn: return
     try:
         cur = conn.cursor()
-        cur.execute("CREATE TABLE IF NOT EXISTS allowed_emails (email VARCHAR(255) PRIMARY KEY);")
+        cur.execute("CREATE TABLE IF NOT EXISTS allowed_emails (email VARCHAR(255) PRIMARY KEY, role TEXT DEFAULT 'admin');")
         cur.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);")
         cur.execute("""
         CREATE TABLE IF NOT EXISTS leads (
@@ -44,11 +44,11 @@ def init_db():
             archived_at TIMESTAMP DEFAULT NULL
         );
         """)
-        # Гарантируем наличие всех колонок
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL;")
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS preferred_time TEXT;")
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS source TEXT;")
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS whatsapp TEXT;")
+        cur.execute("ALTER TABLE allowed_emails ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'admin';")
         conn.commit()
     finally:
         conn.close()
@@ -165,16 +165,6 @@ def update_lead(lead_id, **kwargs):
     finally:
         conn.close()
 
-def delete_lead(lead_id):
-    conn = get_connection()
-    if not conn: return
-    try:
-        cur = conn.cursor()
-        cur.execute("DELETE FROM leads WHERE id = %s", (lead_id,))
-        conn.commit()
-    finally:
-        conn.close()
-
 def clear_all_leads():
     conn = get_connection()
     if not conn: return
@@ -191,17 +181,17 @@ def get_allowed_emails():
     if not conn: return []
     try:
         cur = conn.cursor()
-        cur.execute("SELECT email FROM allowed_emails")
-        return [row[0] for row in cur.fetchall()]
+        cur.execute("SELECT email, role FROM allowed_emails")
+        return [dict(zip(['email', 'role'], row)) for row in cur.fetchall()]
     finally:
         conn.close()
 
-def add_allowed_email(email):
+def add_allowed_email(email, role='admin'):
     conn = get_connection()
     if not conn: return
     try:
         cur = conn.cursor()
-        cur.execute("INSERT INTO allowed_emails (email) VALUES (%s) ON CONFLICT DO NOTHING", (email,))
+        cur.execute("INSERT INTO allowed_emails (email, role) VALUES (%s, %s) ON CONFLICT (email) DO UPDATE SET role = %s", (email, role, role))
         conn.commit()
     finally:
         conn.close()
