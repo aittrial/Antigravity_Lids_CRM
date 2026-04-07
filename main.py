@@ -173,20 +173,37 @@ def main():
                 df_ex.to_excel(towrite, index=False, engine='xlsxwriter')
                 st.download_button("📥 Скачать Excel", data=towrite.getvalue(), file_name=f"export_{date.today()}.xlsx", use_container_width=True)
                 
-                # --- ВСТАВЛЕННЫЙ КОД ТРАНСЛЯЦИИ ---
+                # --- ИСПРАВЛЕННЫЙ КОД ТРАНСЛЯЦИИ (Excel + CSV) ---
                 if st.button("🤖 Отправить бэкап в Telegram", use_container_width=True):
                     try:
+                        # 1. Готовим Excel
                         buf_xls = io.BytesIO()
                         with pd.ExcelWriter(buf_xls, engine='xlsxwriter') as writer:
                             df_ex.to_excel(writer, index=False)
                         buf_xls.seek(0)
+                        
+                        # 2. Готовим CSV
+                        buf_csv = io.BytesIO()
+                        df_ex.to_csv(buf_csv, index=False, encoding='utf-8-sig')
+                        buf_csv.seek(0)
+                        
                         url = f"https://api.telegram.org/bot{TELE_TOKEN}/sendDocument"
-                        cap = f"📦 CRM BACKUP | 📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}"
-                        requests.post(url, data={'chat_id': TELE_CHAT_ID, 'caption': cap}, files={'document': (f"leads_backup.xlsx", buf_xls)})
-                        st.success("✅ Бэкап успешно отправлен в Telegram!")
+                        ts = datetime.now().strftime('%d.%m.%Y %H:%M')
+                        
+                        # Отправка Excel
+                        requests.post(url, 
+                                      data={'chat_id': TELE_CHAT_ID, 'caption': f"📦 Excel Backup | 📅 {ts}"}, 
+                                      files={'document': (f"leads_backup_{date.today()}.xlsx", buf_xls)})
+                        
+                        # Отправка CSV
+                        requests.post(url, 
+                                      data={'chat_id': TELE_CHAT_ID, 'caption': f"📄 CSV Backup | 📅 {ts}"}, 
+                                      files={'document': (f"leads_backup_{date.today()}.csv", buf_csv)})
+                        
+                        st.success("✅ Бэкап успешно отправлен (Excel + CSV)!")
                     except Exception as e:
                         st.error(f"Ошибка отправки: {e}")
-                # ----------------------------------
+                # ------------------------------------------------
 
         with c2:
             st.subheader("📦 Архивация")
