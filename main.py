@@ -54,21 +54,45 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
         color = get_status_color(row['status_color'])
         date_s = row['created_at'].strftime("%d.%m.%Y %H:%M")
         st.markdown(f'<div style="background-color:{color}; border-radius:10px; padding:12px; margin-bottom:10px; border:2px solid #444; color: black !important;"><b style="color: black !important; font-size: 14px;">#{start_order+i} | 📅 {date_s} | {row["full_name"]} | {row["phone"]}</b></div>', unsafe_allow_html=True)
+        
         with st.expander("🛠 Управление"):
-            c1, c2, c3 = st.columns(3)
-            wa_raw = row.get('whatsapp') if row.get('whatsapp') else row['phone']
-            p_cl = ''.join(filter(str.isdigit, str(wa_raw)))
-            with c1: st.markdown(f'''<a href="https://wa.me/{p_cl}" target="_blank"><button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; width:100%;">💬 WhatsApp</button></a>''', unsafe_allow_html=True)
-            with c2: st.code(f"ФИО: {row['full_name']}\nТел: {row['phone']}", language=None)
+            c1, c2, c3 = st.columns([1, 2, 1])
+            
+            # Кнопка WhatsApp
+            wa_val = row.get('whatsapp') if row.get('whatsapp') else row['phone']
+            p_cl = ''.join(filter(str.isdigit, str(wa_val)))
+            with c1: 
+                st.markdown(f'''<a href="https://wa.me/{p_cl}" target="_blank"><button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; width:100%;">💬 WhatsApp</button></a>''', unsafe_allow_html=True)
+            
+            # Блок для копирования (Copy to clipboard)
+            with c2:
+                copy_parts = [f"ФИО: {row['full_name']}", f"Тел: {row['phone']}"]
+                if row.get('whatsapp'): copy_parts.append(f"WhatsApp: {row['whatsapp']}")
+                if row.get('email'): copy_parts.append(f"Email: {row['email']}")
+                if row.get('course_name'): copy_parts.append(f"Курс: {row['course_name']}")
+                if row.get('comment'): copy_parts.append(f"Комментарий: {row['comment']}")
+                st.code("\n".join(copy_parts), language=None)
+            
             with c3:
                 if can_archive and st.button("📦 В архив", key=f"arch_btn_{row['id']}"):
                     archive_single_lead(row['id']); st.rerun()
+            
             st.divider()
-            n_fn = st.text_input("Изменить ФИО", row['full_name'], key=f"fn_{row['id']}")
-            n_ph = st.text_input("Изменить Тел", row['phone'], key=f"ph_{row['id']}")
-            n_sc = st.selectbox("Изменить Статус", COLOR_KEYS, index=COLOR_KEYS.index(row['status_color']), key=f"sc_{row['id']}")
-            if st.button("💾 Сохранить", key=f"save_{row['id']}"):
-                update_lead(row['id'], full_name=n_fn, phone=n_ph, status_color=n_sc); st.rerun()
+            
+            # ПОЛЯ УПРАВЛЕНИЯ (ВОССТАНОВЛЕНО)
+            col_edit1, col_edit2 = st.columns(2)
+            with col_edit1:
+                n_fn = st.text_input("Изменить ФИО", row['full_name'], key=f"fn_{row['id']}")
+                n_ph = st.text_input("Изменить Тел", row['phone'], key=f"ph_{row['id']}")
+                n_wa = st.text_input("Изменить WhatsApp", row.get('whatsapp', ''), key=f"wa_{row['id']}")
+            with col_edit2:
+                n_em = st.text_input("Изменить Email", row.get('email', ''), key=f"em_{row['id']}")
+                n_sc = st.selectbox("Изменить Статус", COLOR_KEYS, index=COLOR_KEYS.index(row['status_color']), key=f"sc_{row['id']}")
+                n_cm = st.text_area("Комментарий", row.get('comment', ''), key=f"cm_{row['id']}", height=68)
+            
+            if st.button("💾 Сохранить изменения", key=f"save_{row['id']}", use_container_width=True):
+                update_lead(row['id'], full_name=n_fn, phone=n_ph, whatsapp=n_wa, email=n_em, status_color=n_sc, comment=n_cm)
+                st.rerun()
 
 def main():
     if not check_password(): return
@@ -173,37 +197,24 @@ def main():
                 df_ex.to_excel(towrite, index=False, engine='xlsxwriter')
                 st.download_button("📥 Скачать Excel", data=towrite.getvalue(), file_name=f"export_{date.today()}.xlsx", use_container_width=True)
                 
-                # --- ИСПРАВЛЕННЫЙ КОД ТРАНСЛЯЦИИ (Excel + CSV) ---
                 if st.button("🤖 Отправить бэкап в Telegram", use_container_width=True):
                     try:
-                        # 1. Готовим Excel
                         buf_xls = io.BytesIO()
                         with pd.ExcelWriter(buf_xls, engine='xlsxwriter') as writer:
                             df_ex.to_excel(writer, index=False)
                         buf_xls.seek(0)
                         
-                        # 2. Готовим CSV
                         buf_csv = io.BytesIO()
                         df_ex.to_csv(buf_csv, index=False, encoding='utf-8-sig')
                         buf_csv.seek(0)
                         
                         url = f"https://api.telegram.org/bot{TELE_TOKEN}/sendDocument"
                         ts = datetime.now().strftime('%d.%m.%Y %H:%M')
-                        
-                        # Отправка Excel
-                        requests.post(url, 
-                                      data={'chat_id': TELE_CHAT_ID, 'caption': f"📦 Excel Backup | 📅 {ts}"}, 
-                                      files={'document': (f"leads_backup_{date.today()}.xlsx", buf_xls)})
-                        
-                        # Отправка CSV
-                        requests.post(url, 
-                                      data={'chat_id': TELE_CHAT_ID, 'caption': f"📄 CSV Backup | 📅 {ts}"}, 
-                                      files={'document': (f"leads_backup_{date.today()}.csv", buf_csv)})
-                        
-                        st.success("✅ Бэкап успешно отправлен (Excel + CSV)!")
+                        requests.post(url, data={'chat_id': TELE_CHAT_ID, 'caption': f"📦 Excel Backup | 📅 {ts}"}, files={'document': (f"leads_backup_{date.today()}.xlsx", buf_xls)})
+                        requests.post(url, data={'chat_id': TELE_CHAT_ID, 'caption': f"📄 CSV Backup | 📅 {ts}"}, files={'document': (f"leads_backup_{date.today()}.csv", buf_csv)})
+                        st.success("✅ Бэкап отправлен (Excel + CSV)!")
                     except Exception as e:
                         st.error(f"Ошибка отправки: {e}")
-                # ------------------------------------------------
 
         with c2:
             st.subheader("📦 Архивация")
