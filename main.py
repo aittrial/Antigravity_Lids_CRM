@@ -284,8 +284,10 @@ def main():
         with c3:
             st.subheader("🔥 Очистка")
             if user_role == "superadmin":
-                if st.confirm("Вы уверены, что хотите УДАЛИТЬ ВСЕ данные безвозвратно?"):
-                    if st.button("🔥 УДАЛИТЬ ВСЁ"):
+                # ИСПРАВЛЕНИЕ: Используем checkbox вместо несуществующего st.confirm
+                confirm_delete = st.checkbox("Я уверен, что хочу удалить ВСЕ данные")
+                if confirm_delete:
+                    if st.button("🔥 ПОДТВЕРДИТЬ УДАЛЕНИЕ"):
                         clear_all_leads()
                         st.success("База данных полностью очищена.")
                         st.rerun()
