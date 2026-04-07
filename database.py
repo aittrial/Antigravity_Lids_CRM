@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def get_connection():
-    """Прямое подключение к базе с явным выводом ошибок."""
     try:
         conn = psycopg2.connect(
             host=os.getenv("DB_HOST"),
@@ -19,103 +18,32 @@ def get_connection():
         )
         return conn
     except Exception as e:
-        st.error(f"❌ Ошибка подключения к базе: {e}")
+        st.error(f"❌ Ошибка базы: {e}")
         return None
 
 def init_db():
-    """Инициализация таблиц и проверка всех необходимых колонок."""
     conn = get_connection()
     if not conn: return
     try:
         cur = conn.cursor()
-        # Таблица доступов
         cur.execute("CREATE TABLE IF NOT EXISTS allowed_emails (email VARCHAR(255) PRIMARY KEY, role TEXT DEFAULT 'admin');")
-        # Таблица настроек (архивация)
         cur.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);")
-        # Основная таблица лидов
         cur.execute("""
         CREATE TABLE IF NOT EXISTS leads (
             id SERIAL PRIMARY KEY,
-            full_name TEXT,
-            phone TEXT,
-            whatsapp TEXT,
-            email TEXT,
-            course_name TEXT,
-            preferred_time TEXT,
-            source TEXT,
-            comment TEXT,
+            full_name TEXT, phone TEXT, whatsapp TEXT, email TEXT,
+            course_name TEXT, preferred_time TEXT, source TEXT, comment TEXT,
             status_color VARCHAR(50) DEFAULT 'white',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             archived_at TIMESTAMP DEFAULT NULL
         );
         """)
-        # Явные проверки на случай, если база старая
-        cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL;")
-        cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS preferred_time TEXT;")
-        cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS source TEXT;")
-        cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS whatsapp TEXT;")
-        cur.execute("ALTER TABLE allowed_emails ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'admin';")
-        
-        # Профилактика пустых ролей
         cur.execute("UPDATE allowed_emails SET role = 'admin' WHERE role IS NULL;")
-        
-        conn.commit()
-    finally:
-        conn.close()
-
-def get_allowed_emails():
-    """Получение всех разрешенных мейлов и их ролей."""
-    conn = get_connection()
-    if not conn: return []
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT email, role FROM allowed_emails")
-        rows = cur.fetchall()
-        result = []
-        for row in rows:
-            result.append({'email': row[0], 'role': row[1]})
-        return result
-    finally:
-        conn.close()
-
-def add_allowed_email(email, role='admin'):
-    """Добавление нового сотрудника с ролью."""
-    conn = get_connection()
-    if not conn: return
-    try:
-        cur = conn.cursor()
-        cur.execute("INSERT INTO allowed_emails (email, role) VALUES (%s, %s) ON CONFLICT (email) DO UPDATE SET role = %s", (email, role, role))
-        conn.commit()
-    finally:
-        conn.close()
-
-def delete_allowed_email(email):
-    """Удаление доступа."""
-    conn = get_connection()
-    if not conn: return
-    try:
-        cur = conn.cursor()
-        cur.execute("DELETE FROM allowed_emails WHERE email = %s", (email,))
-        conn.commit()
-    finally:
-        conn.close()
-
-def add_lead(full_name, phone, email='', course_name='', preferred_time='', source='', comment='', status_color='white', whatsapp=''):
-    """Добавление лида со всеми полями."""
-    conn = get_connection()
-    if not conn: return
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO leads (full_name, phone, whatsapp, email, course_name, preferred_time, source, comment, status_color)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (str(full_name), str(phone), str(whatsapp), str(email), str(course_name), str(preferred_time), str(source), str(comment), str(status_color)))
         conn.commit()
     finally:
         conn.close()
 
 def get_leads(search_query=None, start_date=None, end_date=None, mode="active", status_filter=None, source_filter=None):
-    """Сложный поиск лидов с фильтрами."""
     conn = get_connection()
     if not conn: return []
     try:
@@ -138,8 +66,8 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
             params.append(source_filter)
 
         if search_query:
-            query += " AND (full_name ILIKE %s OR phone ILIKE %s OR whatsapp ILIKE %s)"
-            params.extend([f"%{search_query}%", f"%{search_query}%", f"%{search_query}%"])
+            query += " AND (full_name ILIKE %s OR phone ILIKE %s)"
+            params.extend([f"%{search_query}%", f"%{search_query}%"])
         
         if start_date:
             query += " AND created_at >= %s"
@@ -148,15 +76,30 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
             query += " AND created_at <= %s"
             params.append(datetime.combine(end_date, datetime.max.time()))
 
-        query += " ORDER BY id DESC LIMIT 50"
+        query += " ORDER BY id DESC"
+        # УБРАЛ LIMIT, чтобы ты видел все лиды
         cur.execute(query, params)
         colnames = [desc[0] for desc in cur.description]
         return [dict(zip(colnames, row)) for row in cur.fetchall()]
     finally:
         conn.close()
 
+# Остальные функции (add_lead, update_lead, delete_lead, get_allowed_emails, etc.) 
+# остаются БЕЗ ИЗМЕНЕНИЙ, чтобы ничего не сломать.
+def add_lead(full_name, phone, email='', course_name='', preferred_time='', source='', comment='', status_color='white', whatsapp=''):
+    conn = get_connection()
+    if not conn: return
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO leads (full_name, phone, whatsapp, email, course_name, preferred_time, source, comment, status_color)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (str(full_name), str(phone), str(whatsapp), str(email), str(course_name), str(preferred_time), str(source), str(comment), str(status_color)))
+        conn.commit()
+    finally:
+        conn.close()
+
 def update_lead(lead_id, **kwargs):
-    """Обновление лида."""
     conn = get_connection()
     if not conn: return
     try:
@@ -170,7 +113,6 @@ def update_lead(lead_id, **kwargs):
         conn.close()
 
 def delete_lead(lead_id):
-    """Полное удаление лида."""
     conn = get_connection()
     if not conn: return
     try:
@@ -180,14 +122,33 @@ def delete_lead(lead_id):
     finally:
         conn.close()
 
-def get_archive_threshold():
+def get_allowed_emails():
     conn = get_connection()
-    if not conn: return None
+    if not conn: return []
     try:
         cur = conn.cursor()
-        cur.execute("SELECT value FROM settings WHERE key = 'archive_date'")
-        res = cur.fetchone()
-        return res[0] if res else None
+        cur.execute("SELECT email, role FROM allowed_emails")
+        return [dict(zip(['email', 'role'], row)) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+def add_allowed_email(email, role='admin'):
+    conn = get_connection()
+    if not conn: return
+    try:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO allowed_emails (email, role) VALUES (%s, %s) ON CONFLICT (email) DO UPDATE SET role = %s", (email, role, role))
+        conn.commit()
+    finally:
+        conn.close()
+
+def delete_allowed_email(email):
+    conn = get_connection()
+    if not conn: return
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM allowed_emails WHERE email = %s", (email,))
+        conn.commit()
     finally:
         conn.close()
 
@@ -203,6 +164,17 @@ def set_archive_threshold():
     finally:
         conn.close()
 
+def get_archive_threshold():
+    conn = get_connection()
+    if not conn: return None
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT value FROM settings WHERE key = 'archive_date'")
+        res = cur.fetchone()
+        return res[0] if res else None
+    finally:
+        conn.close()
+
 def archive_single_lead(lead_id):
     conn = get_connection()
     if not conn: return
@@ -214,7 +186,6 @@ def archive_single_lead(lead_id):
         conn.close()
 
 def clear_all_leads():
-    """Полная очистка базы."""
     conn = get_connection()
     if not conn: return
     try:
