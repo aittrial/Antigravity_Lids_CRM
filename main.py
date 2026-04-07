@@ -158,7 +158,6 @@ def main():
             if st.form_submit_button("Создать"):
                 if fn and ph:
                     add_lead(fn, ph, course_name=crs, source=src)
-                    # Трансляция в Telegram для админов
                     send_telegram_notification(fn, ph, crs, src)
                     st.success("✅ Добавлен и отправлен в Telegram!"); st.rerun()
 
@@ -173,6 +172,22 @@ def main():
                 towrite = io.BytesIO()
                 df_ex.to_excel(towrite, index=False, engine='xlsxwriter')
                 st.download_button("📥 Скачать Excel", data=towrite.getvalue(), file_name=f"export_{date.today()}.xlsx", use_container_width=True)
+                
+                # --- ВСТАВЛЕННЫЙ КОД ТРАНСЛЯЦИИ ---
+                if st.button("🤖 Отправить бэкап в Telegram", use_container_width=True):
+                    try:
+                        buf_xls = io.BytesIO()
+                        with pd.ExcelWriter(buf_xls, engine='xlsxwriter') as writer:
+                            df_ex.to_excel(writer, index=False)
+                        buf_xls.seek(0)
+                        url = f"https://api.telegram.org/bot{TELE_TOKEN}/sendDocument"
+                        cap = f"📦 CRM BACKUP | 📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+                        requests.post(url, data={'chat_id': TELE_CHAT_ID, 'caption': cap}, files={'document': (f"leads_backup.xlsx", buf_xls)})
+                        st.success("✅ Бэкап успешно отправлен в Telegram!")
+                    except Exception as e:
+                        st.error(f"Ошибка отправки: {e}")
+                # ----------------------------------
+
         with c2:
             st.subheader("📦 Архивация")
             if user_role in ["admin", "superadmin"]:
