@@ -37,9 +37,11 @@ def send_telegram_backup(df):
         cap = f"📦 CRM FULL BACKUP\n📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}\n👥 Лидов: {len(df)}"
         requests.post(url, data={'chat_id': TELE_CHAT_ID, 'caption': cap}, files={'document': (f"leads_backup_{date.today()}.xlsx", buf_xls)})
         res2 = requests.post(url, data={'chat_id': TELE_CHAT_ID}, files={'document': (f"leads_backup_{date.today()}.csv", buf_csv)})
-        return True, "Бэкап отправлен!"
+        st.success("📦 Бэкап успешно отправлен в Telegram!")
+        return True
     except Exception as e:
-        return False, f"Ошибка: {e}"
+        st.error(f"Ошибка бэкапа: {e}")
+        return False
 
 def get_status_color(status):
     colors = {"blue": "#B3D7FF", "yellow": "#FFF59D", "red": "#FFAB91", "green": "#C8E6C9", "purple": "#E1BEE7", "pink": "#F8BBD0", "white": "#F0F2F6"}
@@ -82,7 +84,6 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
 def main():
     if not check_password(): return
     user_role = st.session_state.get("role", "admin")
-    
     st.sidebar.markdown(f"### {APP_TITLE}")
     
     if user_role == "analyst":
@@ -182,7 +183,7 @@ def main():
         st.divider()
         st.subheader("🚀 Импорт данных")
         uploaded_file = st.file_uploader("Загрузите XLSX файл", type=["xlsx"])
-        if uploaded_file and st.button("🚀 Запустить импорт"):
+        if uploaded_file and st.button("🚀 Загрузить"):
             try:
                 df_up = pd.read_excel(uploaded_file, header=None)
                 for _, r in df_up.iterrows():

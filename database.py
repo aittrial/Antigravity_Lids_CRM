@@ -165,6 +165,16 @@ def update_lead(lead_id, **kwargs):
     finally:
         conn.close()
 
+def delete_lead(lead_id):
+    conn = get_connection()
+    if not conn: return
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM leads WHERE id = %s", (lead_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
 def clear_all_leads():
     conn = get_connection()
     if not conn: return
