@@ -159,22 +159,27 @@ def main():
             render_leads_list(data_active, start_order=1, can_archive=True)
 
         with t2:
-            l_per_page = 50
-            c_off = st.session_state.archive_page_number * l_per_page
-            data_archive = get_leads(s_query, st_d, en_d, mode="archive", status_filter=c_filt, source_filter=src_filt, limit=l_per_page, offset=c_off)
-            render_leads_list(data_archive, start_order=c_off + 1)
+            # ТОЧЕЧНОЕ ИСПРАВЛЕНИЕ НАВИГАЦИИ
+            limit_arch = 50
+            offset_arch = st.session_state.archive_page_number * limit_arch
+            data_archive = get_leads(s_query, st_d, en_d, mode="archive", status_filter=c_filt, source_filter=src_filt, limit=limit_arch, offset=offset_arch)
+            
+            render_leads_list(data_archive, start_order=offset_arch + 1)
             
             st.write("---")
             nav1, nav2, nav3 = st.columns([1, 2, 1])
             with nav1:
                 if st.button("⬅️ Назад", key="btn_arc_p") and st.session_state.archive_page_number > 0:
                     st.session_state.archive_page_number -= 1; st.rerun()
-            with nav2: st.markdown(f"<center>Страница {st.session_state.archive_page_number + 1}</center>", unsafe_allow_html=True)
+            with nav2: 
+                st.markdown(f"<center>Страница {st.session_state.archive_page_number + 1}</center>", unsafe_allow_html=True)
             with nav3:
-                if len(data_archive) >= 50:
+                # Кнопка "Вперед" активна, если получено ровно 50 лидов (значит, есть еще)
+                if len(data_archive) >= limit_arch:
                     if st.button("Вперед ➡️", key="btn_arc_n"):
                         st.session_state.archive_page_number += 1; st.rerun()
-                else: st.write("Конец")
+                else:
+                    st.info("Конец списка")
 
     elif choice == "➕ Новый лид":
         st.header("➕ Новый лид")
@@ -193,9 +198,7 @@ def main():
             
             if st.form_submit_button("Создать"):
                 if fn and ph:
-                    # Добавление со всеми полями
                     add_lead(fn, ph, email=em, course_name=crs, source=src, whatsapp=wa, comment=cm)
-                    # Уведомление со всеми полями
                     send_telegram_notification(fn, ph, crs, src, email=em, whatsapp=wa, comment=cm)
                     st.success("✅ Добавлен и отправлен в Telegram!"); st.rerun()
                 else:

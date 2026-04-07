@@ -87,11 +87,11 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
 
         query += " ORDER BY id DESC"
         
-        # ЖЕСТКОЕ ИСПРАВЛЕНИЕ ЛИМИТА
+        # ТОЧЕЧНОЕ ИСПРАВЛЕНИЕ: Прямая вставка для игнорирования лимита в 10
         if mode != "all":
-            query += " LIMIT %s OFFSET %s"
-            params.append(limit)
-            params.append(offset)
+            safe_limit = int(limit)
+            safe_offset = int(offset)
+            query += f" LIMIT {safe_limit} OFFSET {safe_offset}"
 
         cur.execute(query, params)
         colnames = [desc[0] for desc in cur.description]
