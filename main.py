@@ -26,17 +26,21 @@ COURSE_OPTIONS = ["QA testing", "Programming", "QA testing AIT", "Programming AI
 COLOR_KEYS = ["white", "blue", "yellow", "red", "green", "purple", "pink"]
 FILTER_COLOR_MAP = ["Все", "Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"]
 
-def send_telegram_notification(full_name, phone, course, source):
+def send_telegram_notification(full_name, phone, course, source, email='', whatsapp='', comment=''):
     """Отправка уведомления о новом лиде в Telegram."""
     try:
         text = (
             f"🔔 **Новый лид!**\n\n"
             f"👤 ФИО: {full_name}\n"
             f"📞 Тел: {phone}\n"
-            f"📚 Курс: {course}\n"
-            f"📡 Источник: {source}\n"
-            f"⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
         )
+        if whatsapp: text += f"💬 WhatsApp: {whatsapp}\n"
+        if email: text += f"📧 Email: {email}\n"
+        text += f"📚 Курс: {course}\n"
+        text += f"📡 Источник: {source}\n"
+        if comment: text += f"📝 Комм: {comment}\n"
+        text += f"⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+        
         url = f"https://api.telegram.org/bot{TELE_TOKEN}/sendMessage"
         requests.post(url, data={'chat_id': TELE_CHAT_ID, 'text': text, 'parse_mode': 'Markdown'})
     except Exception as e:
@@ -175,15 +179,27 @@ def main():
     elif choice == "➕ Новый лид":
         st.header("➕ Новый лид")
         with st.form("f_new"):
-            fn = st.text_input("ФИО")
-            ph = st.text_input("Тел")
-            crs = st.selectbox("Курс", COURSE_OPTIONS)
-            src = st.selectbox("Источник", SOURCE_OPTIONS)
+            col_n1, col_n2 = st.columns(2)
+            with col_n1:
+                fn = st.text_input("ФИО")
+                ph = st.text_input("Тел")
+                wa = st.text_input("WhatsApp (если другой)")
+            with col_n2:
+                em = st.text_input("Email")
+                crs = st.selectbox("Курс", COURSE_OPTIONS)
+                src = st.selectbox("Источник", SOURCE_OPTIONS)
+            
+            cm = st.text_area("Комментарий")
+            
             if st.form_submit_button("Создать"):
                 if fn and ph:
-                    add_lead(fn, ph, course_name=crs, source=src)
-                    send_telegram_notification(fn, ph, crs, src)
+                    # Добавление со всеми полями
+                    add_lead(fn, ph, email=em, course_name=crs, source=src, whatsapp=wa, comment=cm)
+                    # Уведомление со всеми полями
+                    send_telegram_notification(fn, ph, crs, src, email=em, whatsapp=wa, comment=cm)
                     st.success("✅ Добавлен и отправлен в Telegram!"); st.rerun()
+                else:
+                    st.error("ФИО и Телефон обязательны")
 
     elif choice == "📂 База данных":
         st.header("📂 База данных")
