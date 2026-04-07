@@ -44,6 +44,10 @@ def init_db():
             archived_at TIMESTAMP DEFAULT NULL
         );
         """)
+        # Индексы для ускорения работы списка лидов
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_archived ON leads (archived_at);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_created ON leads (created_at);")
+        
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL;")
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS preferred_time TEXT;")
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS source TEXT;")
@@ -106,7 +110,8 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
     try:
         cur = conn.cursor()
         threshold = get_archive_threshold()
-        query = "SELECT * FROM leads WHERE 1=1"
+        # Оптимизированный запрос: выбираем только нужные поля для ускорения
+        query = "SELECT id, full_name, phone, whatsapp, email, course_name, preferred_time, source, comment, status_color, created_at, archived_at FROM leads WHERE 1=1"
         params = []
 
         if mode == "active":
@@ -114,14 +119,10 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
             if threshold:
                 query += " AND created_at > %s"
                 params.append(threshold)
-            limit_sql = " LIMIT 50"
+            limit_sql = " LIMIT 50" # Ограничиваем выдачу для скорости
         elif mode == "archive":
-            if threshold:
-                query += " AND (archived_at IS NOT NULL OR created_at <= %s)"
-                params.append(threshold)
-            else:
-                query += " AND archived_at IS NOT NULL"
-            limit_sql = ""
+            query += " AND archived_at IS NOT NULL"
+            limit_sql = " LIMIT 100"
         else:
             limit_sql = ""
 
@@ -135,8 +136,8 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
             params.append(source_filter)
 
         if search_query:
-            query += " AND (full_name ILIKE %s OR phone ILIKE %s OR whatsapp ILIKE %s)"
-            params.extend([f"%{search_query}%", f"%{search_query}%", f"%{search_query}%"])
+            query += " AND (full_name ILIKE %s OR phone ILIKE %s)"
+            params.extend([f"%{search_query}%", f"%{search_query}%"])
         
         if start_date:
             query += " AND created_at >= %s"

@@ -30,14 +30,10 @@ def send_telegram_backup(df):
         with pd.ExcelWriter(buf_xls, engine='xlsxwriter') as writer:
             df.to_excel(writer, index=False)
         buf_xls.seek(0)
-        buf_csv = io.BytesIO()
-        df.to_csv(buf_csv, index=False, encoding='utf-8-sig')
-        buf_csv.seek(0)
         url = f"https://api.telegram.org/bot{TELE_TOKEN}/sendDocument"
-        cap = f"📦 CRM FULL BACKUP\n📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}\n👥 Лидов: {len(df)}"
-        requests.post(url, data={'chat_id': TELE_CHAT_ID, 'caption': cap}, files={'document': (f"leads_backup_{date.today()}.xlsx", buf_xls)})
-        res2 = requests.post(url, data={'chat_id': TELE_CHAT_ID}, files={'document': (f"leads_backup_{date.today()}.csv", buf_csv)})
-        st.success("📦 Бэкап успешно отправлен в Telegram!")
+        cap = f"📦 CRM BACKUP | 📅 {datetime.now().strftime('%d.%m.%Y')}"
+        requests.post(url, data={'chat_id': TELE_CHAT_ID, 'caption': cap}, files={'document': (f"leads_backup.xlsx", buf_xls)})
+        st.success("✅ Бэкап отправлен!")
         return True
     except Exception as e:
         st.error(f"Ошибка бэкапа: {e}")
@@ -86,6 +82,7 @@ def main():
     user_role = st.session_state.get("role", "admin")
     st.sidebar.markdown(f"### {APP_TITLE}")
     
+    # Строгая фильтрация меню по ролям
     if user_role == "analyst":
         menu = ["📊 Аналитика"]
     else:
@@ -128,12 +125,24 @@ def main():
             c_src, c_dyn = st.columns(2)
             with c_src:
                 if not df_week.empty:
-                    fig_src = px.pie(df_week['source'].value_counts().reset_index(), values='count', names='source', title="Источники лидов (ПОСЛЕДНИЕ 7 ДНЕЙ)", hole=0.4)
+                    fig_src = px.pie(df_week['source'].value_counts().reset_index(), values='count', names='source', title="Источники лидов (7 дней)", hole=0.4)
                     st.plotly_chart(fig_src, use_container_width=True)
             with c_dyn:
                 if not df_week.empty:
                     dyn = df_week.groupby('date_only').size().reset_index(name='count')
                     st.plotly_chart(px.area(dyn, x='date_only', y='count', title="Динамика новых лидов (7 дней)"), use_container_width=True)
+            
+            # ВОЗВРАЩЕННЫЙ ГРАФИК ПО ЦВЕТАМ
+            st.divider()
+            st.subheader("🎨 Работа по статусам (ПОСЛЕДНИЕ 7 ДНЕЙ)")
+            if not df_week.empty:
+                st_counts = df_week[df_week['status_color'] != 'white']['status_color'].value_counts().reset_index()
+                st_counts.columns = ['Статус', 'Кол-во']
+                # Карта цветов для графика
+                color_map = {'blue':'#B3D7FF','yellow':'#FFF59D','red':'#FFAB91','green':'#C8E6C9','purple':'#E1BEE7','pink':'#F8BBD0'}
+                fig_bar = px.bar(st_counts, x='Кол-во', y='Статус', orientation='h', color='Статус', color_discrete_map=color_map)
+                st.plotly_chart(fig_bar, use_container_width=True)
+
         else: st.info("База пуста")
 
     elif choice == "👥 Список лидов":
@@ -142,7 +151,8 @@ def main():
         s_query, d_range = f1.text_input("🔍 Поиск"), f2.date_input("📅 Дата", value=(date.today()-timedelta(days=30), date.today()))
         c_filt, src_filt = f3.selectbox("🎨 Статус", FILTER_COLOR_MAP), f4.selectbox("📡 Источник", FILTER_SOURCE_MAP)
         st_d, en_d = (d_range[0], d_range[1]) if len(d_range) == 2 else (None, None)
-        t1, t2 = st.tabs(["🔥 Активные", "📦 Архив"])
+        t1, t2 = st.tabs(["🔥 Активные (ТОП-50)", "📦 Архив"])
+        # Здесь теперь работает оптимизированный запрос с LIMIT 50
         with t1: render_leads_list(get_leads(s_query, st_d, en_d, mode="active", status_filter=c_filt, source_filter=src_filt), can_archive=True)
         with t2: render_leads_list(get_leads(s_query, st_d, en_d, mode="archive", status_filter=c_filt, source_filter=src_filt))
 
@@ -170,8 +180,6 @@ def main():
                 bx = io.BytesIO()
                 with pd.ExcelWriter(bx, engine='xlsxwriter') as wr: df_ex.to_excel(wr, index=False)
                 st.download_button("📥 Excel (.xlsx)", data=bx.getvalue(), file_name=f"leads_{date.today()}.xlsx")
-                st.download_button("📥 CSV (.csv)", data=df_ex.to_csv(index=False).encode('utf-8-sig'), file_name=f"leads_{date.today()}.csv")
-                st.divider()
                 if st.button("🤖 Бэкап в Telegram"): send_telegram_backup(df_ex)
         with c2:
             st.subheader("📦 Архивация")
@@ -183,7 +191,7 @@ def main():
         st.divider()
         st.subheader("🚀 Импорт данных")
         uploaded_file = st.file_uploader("Загрузите XLSX файл", type=["xlsx"])
-        if uploaded_file and st.button("🚀 Загрузить"):
+        if uploaded_file and st.button("🚀 Запустить импорт"):
             try:
                 df_up = pd.read_excel(uploaded_file, header=None)
                 for _, r in df_up.iterrows():
