@@ -26,6 +26,22 @@ COURSE_OPTIONS = ["QA testing", "Programming", "QA testing AIT", "Programming AI
 COLOR_KEYS = ["white", "blue", "yellow", "red", "green", "purple", "pink"]
 FILTER_COLOR_MAP = ["Все", "Белый", "Синий", "Желтый", "Красный", "Зеленый", "Фиолетовый", "Розовый"]
 
+def send_telegram_notification(full_name, phone, course, source):
+    """Отправка уведомления о новом лиде в Telegram."""
+    try:
+        text = (
+            f"🔔 **Новый лид!**\n\n"
+            f"👤 ФИО: {full_name}\n"
+            f"📞 Тел: {phone}\n"
+            f"📚 Курс: {course}\n"
+            f"📡 Источник: {source}\n"
+            f"⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+        )
+        url = f"https://api.telegram.org/bot{TELE_TOKEN}/sendMessage"
+        requests.post(url, data={'chat_id': TELE_CHAT_ID, 'text': text, 'parse_mode': 'Markdown'})
+    except Exception as e:
+        st.error(f"Ошибка отправки в Telegram: {e}")
+
 def get_status_color(status):
     colors = {"blue": "#B3D7FF", "yellow": "#FFF59D", "red": "#FFAB91", "green": "#C8E6C9", "purple": "#E1BEE7", "pink": "#F8BBD0", "white": "#F0F2F6"}
     return colors.get(status, "#F0F2F6")
@@ -127,7 +143,6 @@ def main():
                     st.session_state.archive_page_number -= 1; st.rerun()
             with nav2: st.markdown(f"<center>Страница {st.session_state.archive_page_number + 1}</center>", unsafe_allow_html=True)
             with nav3:
-                # ВНИМАНИЕ: СРАВНИВАЕМ С 50
                 if len(data_archive) >= 50:
                     if st.button("Вперед ➡️", key="btn_arc_n"):
                         st.session_state.archive_page_number += 1; st.rerun()
@@ -136,10 +151,16 @@ def main():
     elif choice == "➕ Новый лид":
         st.header("➕ Новый лид")
         with st.form("f_new"):
-            fn, ph = st.text_input("ФИО"), st.text_input("Тел")
-            crs, src = st.selectbox("Курс", COURSE_OPTIONS), st.selectbox("Источник", SOURCE_OPTIONS)
+            fn = st.text_input("ФИО")
+            ph = st.text_input("Тел")
+            crs = st.selectbox("Курс", COURSE_OPTIONS)
+            src = st.selectbox("Источник", SOURCE_OPTIONS)
             if st.form_submit_button("Создать"):
-                if fn and ph: add_lead(fn, ph, course_name=crs, source=src); st.success("✅ Добавлен!"); st.rerun()
+                if fn and ph:
+                    add_lead(fn, ph, course_name=crs, source=src)
+                    # Трансляция в Telegram для админов
+                    send_telegram_notification(fn, ph, crs, src)
+                    st.success("✅ Добавлен и отправлен в Telegram!"); st.rerun()
 
     elif choice == "📂 База данных":
         st.header("📂 База данных")
@@ -151,18 +172,22 @@ def main():
                 df_ex = pd.DataFrame(all_l)
                 towrite = io.BytesIO()
                 df_ex.to_excel(towrite, index=False, engine='xlsxwriter')
-                st.download_button("📥 Скачать Excel", data=towrite.getvalue(), file_name=f"export_{date.today()}.xlsx")
+                st.download_button("📥 Скачать Excel", data=towrite.getvalue(), file_name=f"export_{date.today()}.xlsx", use_container_width=True)
         with c2:
             st.subheader("📦 Архивация")
-            if user_role == "superadmin" and st.button("📦 ВСЕ В АРХИВ"): set_archive_threshold(); st.rerun()
+            if user_role in ["admin", "superadmin"]:
+                if st.button("📦 ВСЕ В АРХИВ", use_container_width=True):
+                    set_archive_threshold(); st.rerun()
         with c3:
             st.subheader("🔥 Очистка")
-            if user_role == "superadmin" and st.checkbox("Я подтверждаю очистку"):
-                if st.button("🔥 УДАЛИТЬ ВСЁ"): clear_all_leads(); st.rerun()
+            if user_role == "superadmin":
+                conf = st.checkbox("Подтверждаю очистку")
+                if st.button("🔥 УДАЛИТЬ ВСЁ", disabled=not conf, use_container_width=True):
+                    clear_all_leads(); st.rerun()
         st.divider()
         st.subheader("🚀 Импорт")
         up_f = st.file_uploader("Загрузите .xlsx", type=["xlsx"])
-        if up_f and st.button("🚀 Начать"):
+        if up_f and st.button("🚀 Начать", use_container_width=True):
             try:
                 df_im = pd.read_excel(up_f)
                 for _, r in df_im.iterrows():
@@ -178,6 +203,6 @@ def main():
         for e in get_allowed_emails():
             col1, col2 = st.columns([4, 1])
             col1.write(f"• {e['email']} ({e['role']})")
-            if col2.button("Удалить", key=f"del_{e['email']}"): delete_allowed_email(e['email']); st.rerun()
+            if col2.button("Удалить", key=f"del_{e['email']}", use_container_width=True): delete_allowed_email(e['email']); st.rerun()
 
 if __name__ == "__main__": main()
