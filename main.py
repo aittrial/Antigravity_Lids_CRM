@@ -14,7 +14,7 @@ from database import (
 from auth import check_password, logout
 
 # ВИЗУАЛЬНЫЙ МАРКЕР ДЛЯ ПРОВЕРКИ ДЕПЛОЯ
-APP_TITLE = "📈 Leads_CRM | v1.1-TEST"
+APP_TITLE = "📈 Leads_CRM | v1.2-FINAL-ARCHIVE-FIX"
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 init_db()
 
@@ -161,7 +161,8 @@ def main():
             limit_arch = 50
             current_page = st.session_state.archive_page_number
             offset_arch = current_page * limit_arch
-            data_archive = get_leads(s_query, st_d, en_d, mode="archive", status_filter=c_filt, source_filter=src_filt, limit=limit_arch, offset=offset_arch)
+            # ПРАВКА: Передаем None, чтобы даты не фильтровали архив
+            data_archive = get_leads(s_query, None, None, mode="archive", status_filter=c_filt, source_filter=src_filt, limit=limit_arch, offset=offset_arch)
             
             render_leads_list(data_archive, start_order=offset_arch + 1)
             

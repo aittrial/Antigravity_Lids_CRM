@@ -78,18 +78,16 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
             params.append(f"%{search_query}%")
             params.append(f"%{search_query}%")
         
-        if start_date:
+        if start_date and mode != "archive":
             query += " AND created_at >= %s"
             params.append(start_date)
-        if end_date:
+        if end_date and mode != "archive":
             query += " AND created_at <= %s"
             params.append(datetime.combine(end_date, datetime.max.time()))
 
         query += " ORDER BY id DESC"
         
-        # ТОЧЕЧНОЕ ИСПРАВЛЕНИЕ ДЛЯ АРХИВА
         if mode == "archive":
-            # Форсируем лимит 50 и текущий отступ прямо в строку запроса
             safe_limit = int(limit)
             safe_offset = int(offset)
             query += f" LIMIT {safe_limit} OFFSET {safe_offset}"
