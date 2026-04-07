@@ -26,18 +26,25 @@ def get_connection():
 def init_db():
     """Инициализация таблиц с явной проверкой каждой колонки."""
     conn = get_connection()
-    if not conn:
-        return
+    if not conn: return
     try:
         cur = conn.cursor()
         
-        # Таблица разрешенных Email
-        cur.execute("CREATE TABLE IF NOT EXISTS allowed_emails (email VARCHAR(255) PRIMARY KEY, role TEXT DEFAULT 'admin');")
+        # Создаем таблицы (развернуто)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS allowed_emails (
+                email VARCHAR(255) PRIMARY KEY, 
+                role TEXT DEFAULT 'admin'
+            );
+        """)
         
-        # Таблица настроек
-        cur.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY, 
+                value TEXT
+            );
+        """)
         
-        # Основная таблица лидов
         cur.execute("""
             CREATE TABLE IF NOT EXISTS leads (
                 id SERIAL PRIMARY KEY,
@@ -55,26 +62,31 @@ def init_db():
             );
         """)
         
-        # Добавляем недостающие колонки (развернуто)
+        # Добавляем колонки по одной (развернуто)
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL;")
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS preferred_time TEXT;")
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS source TEXT;")
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS whatsapp TEXT;")
         cur.execute("ALTER TABLE allowed_emails ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'admin';")
         
-        # Индексы для скорости
+        # Создаем индексы для скорости
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_archived ON leads (archived_at);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_created ON leads (created_at);")
+        
+        # Защита от пустых ролей
+        cur.execute("UPDATE allowed_emails SET role = 'admin' WHERE role IS NULL;")
         
         conn.commit()
     finally:
         conn.close()
 
 def get_leads(search_query=None, start_date=None, end_date=None, mode="active", status_filter=None, source_filter=None, limit=50, offset=0):
-    """Поиск лидов с поддержкой страниц."""
+    """
+    Поиск лидов. 
+    Развернутая логика. ПОДДЕРЖИВАЕТ OFFSET для Архива.
+    """
     conn = get_connection()
-    if not conn:
-        return []
+    if not conn: return []
     try:
         cur = conn.cursor()
         query = "SELECT * FROM leads WHERE 1=1"
@@ -86,7 +98,10 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
             query += " AND archived_at IS NOT NULL"
 
         if status_filter and status_filter != "Все":
-            status_map = {"Белый": "white", "Синий": "blue", "Желтый": "yellow", "Красный": "red", "Зеленый": "green", "Фиолетовый": "purple", "Розовый": "pink"}
+            status_map = {
+                "Белый": "white", "Синий": "blue", "Желтый": "yellow", 
+                "Красный": "red", "Зеленый": "green", "Фиолетовый": "purple", "Розовый": "pink"
+            }
             query += " AND status_color = %s"
             params.append(status_map.get(status_filter, "white"))
 
@@ -102,11 +117,15 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
         if start_date:
             query += " AND created_at >= %s"
             params.append(start_date)
+            
         if end_date:
             query += " AND created_at <= %s"
             params.append(datetime.combine(end_date, datetime.max.time()))
 
-        query += f" ORDER BY id DESC LIMIT %s OFFSET %s"
+        query += " ORDER BY id DESC"
+        
+        # ПРИМЕНЯЕМ LIMIT И OFFSET ДЛЯ ПОСТРАНИЧНОГО ВЫВОДА
+        query += " LIMIT %s OFFSET %s"
         params.append(limit)
         params.append(offset)
 
@@ -139,15 +158,14 @@ def update_lead(lead_id, **kwargs):
     if not conn: return
     try:
         cur = conn.cursor()
+        if not kwargs: return
         for key, value in kwargs.items():
             cur.execute(f"UPDATE leads SET {key} = %s WHERE id = %s", (value, lead_id))
         conn.commit()
     finally:
         conn.close()
 
-# ВОТ ОНА, ФУНКЦИЯ КОТОРОЙ НЕ ХВАТАЛО
 def delete_lead(lead_id):
-    """Полное удаление лида из базы."""
     conn = get_connection()
     if not conn: return
     try:
@@ -165,8 +183,8 @@ def get_allowed_emails():
         cur.execute("SELECT email, role FROM allowed_emails")
         rows = cur.fetchall()
         result = []
-        for r in rows:
-            result.append({'email': r[0], 'role': r[1]})
+        for row in rows:
+            result.append({'email': row[0], 'role': row[1]})
         return result
     finally:
         conn.close()
@@ -203,6 +221,17 @@ def set_archive_threshold():
     finally:
         conn.close()
 
+def get_archive_threshold():
+    conn = get_connection()
+    if not conn: return None
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT value FROM settings WHERE key = 'archive_date'")
+        res = cur.fetchone()
+        return res[0] if res else None
+    finally:
+        conn.close()
+
 def archive_single_lead(lead_id):
     conn = get_connection()
     if not conn: return
@@ -218,8 +247,8 @@ def clear_all_leads():
     if not conn: return
     try:
         cur = conn.cursor()
-        cur.execute("TRUNCATE TABLE leads RESTART IDENTITY")
-        cur.execute("DELETE FROM settings WHERE key = 'archive_date'")
+        cur.execute("TRUNCATE TABLE leads RESTART IDENTITY Cascade;")
+        cur.execute("DELETE FROM settings WHERE key = 'archive_date';")
         conn.commit()
     finally:
         conn.close()
