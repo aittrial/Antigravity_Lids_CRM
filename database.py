@@ -18,7 +18,7 @@ def get_connection():
         )
         return conn
     except Exception as e:
-        st.error(f"❌ Ошибка подключения к базе: {e}")
+        st.error(f"❌ Ошибка подключения: {e}")
         return None
 
 def init_db():
@@ -52,9 +52,6 @@ def init_db():
         conn.close()
 
 def get_leads(search_query=None, start_date=None, end_date=None, mode="active", status_filter=None, source_filter=None, limit=50, offset=0):
-    """
-    ИСПРАВЛЕНО: Теперь лимит по умолчанию 50, а не 10.
-    """
     conn = get_connection()
     if not conn: return []
     try:
@@ -90,7 +87,7 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
 
         query += " ORDER BY id DESC"
         
-        # ДЛЯ АНАЛИТИКИ УБИРАЕМ ЛИМИТ
+        # ЖЕСТКОЕ ИСПРАВЛЕНИЕ ЛИМИТА
         if mode != "all":
             query += " LIMIT %s OFFSET %s"
             params.append(limit)
@@ -112,10 +109,7 @@ def add_lead(full_name, phone, email='', course_name='', preferred_time='', sour
     if not conn: return
     try:
         cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO leads (full_name, phone, whatsapp, email, course_name, preferred_time, source, comment, status_color)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (full_name, phone, whatsapp, email, course_name, preferred_time, source, comment, status_color))
+        cur.execute("INSERT INTO leads (full_name, phone, whatsapp, email, course_name, preferred_time, source, comment, status_color) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)", (full_name, phone, whatsapp, email, course_name, preferred_time, source, comment, status_color))
         conn.commit()
     finally:
         conn.close()
