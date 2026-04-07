@@ -85,59 +85,84 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
 
 def main():
     if not check_password(): return
+    user_role = st.session_state.get("role")
+    
     st.sidebar.markdown(f"### {APP_TITLE}")
-    menu = ["📊 Аналитика", "👥 Список лидов", "➕ Новый лид", "📂 База данных"]
-    if st.session_state.get("role") == "superadmin": menu.append("🔑 Администрирование")
+    
+    # Роли доступа
+    if user_role == "analyst":
+        menu = ["📊 Аналитика"]
+    else:
+        menu = ["📊 Аналитика", "👥 Список лидов", "➕ Новый лид", "📂 База данных"]
+        if user_role == "superadmin": menu.append("🔑 Администрирование")
+            
     choice = st.sidebar.selectbox("Навигация", menu)
     if st.sidebar.button("🚪 Выход"): logout()
 
-    # --- Аналитика ---
     if choice == "📊 Аналитика":
         st.header("📊 Аналитика")
         df_all = pd.DataFrame(get_leads(mode="all"))
+        
         if not df_all.empty:
-            m = st.columns(7)
-            m[0].metric("Всего", len(df_all)); m[1].metric("🔵 Работа", len(df_all[df_all['status_color']=='blue']))
-            m[2].metric("🟡 Ждут", len(df_all[df_all['status_color']=='yellow'])); m[3].metric("🔴 Отказ", len(df_all[df_all['status_color']=='red']))
-            m[4].metric("🟢 Возврат", len(df_all[df_all['status_color']=='green'])); m[5].metric("🟣 Офис", len(df_all[df_all['status_color']=='purple']))
-            m[6].metric("💗 Работа 2", len(df_all[df_all['status_color']=='pink']))
-            st.divider()
+            # 1. СТАТИСТИКА ЗА ВСЁ ВРЕМЯ (Твоя оригинальная строка)
+            st.subheader("📈 Общая статистика (все время)")
+            m_all = st.columns(7)
+            m_all[0].metric("Всего", len(df_all))
+            m_all[1].metric("🔵 Работа", len(df_all[df_all['status_color']=='blue']))
+            m_all[2].metric("🟡 Ждут", len(df_all[df_all['status_color']=='yellow']))
+            m_all[3].metric("🔴 Отказ", len(df_all[df_all['status_color']=='red']))
+            m_all[4].metric("🟢 Возврат", len(df_all[df_all['status_color']=='green']))
+            m_all[5].metric("🟣 Офис", len(df_all[df_all['status_color']=='purple']))
+            m_all[6].metric("💗 Работа 2", len(df_all[df_all['status_color']=='pink']))
             
-            # --- ФИЛЬТРУЕМ ДАННЫЕ ЗА НЕДЕЛЮ ДЛЯ ГРАФИКОВ ---
+            st.divider()
+
+            # 2. СТАТИСТИКА ЗА 7 ДНЕЙ (Новая строка)
+            st.subheader("📅 Статистика за последние 7 дней")
             last_w_date = date.today() - timedelta(days=7)
             df_all['created_at_dt'] = pd.to_datetime(df_all['created_at']).dt.date
             df_week = df_all[df_all['created_at_dt'] >= last_w_date]
+            
+            m_week = st.columns(7)
+            m_week[0].metric("Всего", len(df_week))
+            m_week[1].metric("🔵 Работа", len(df_week[df_week['status_color']=='blue']))
+            m_week[2].metric("🟡 Ждут", len(df_week[df_week['status_color']=='yellow']))
+            m_week[3].metric("🔴 Отказ", len(df_week[df_week['status_color']=='red']))
+            m_week[4].metric("🟢 Возврат", len(df_week[df_week['status_color']=='green']))
+            m_week[5].metric("🟣 Офис", len(df_week[df_week['status_color']=='purple']))
+            m_week[6].metric("💗 Работа 2", len(df_week[df_week['status_color']=='pink']))
 
+            st.divider()
+            
             col_src, col_dyn = st.columns(2)
             
+            # График по источникам (СТРОГО за неделю)
             with col_src:
                 if not df_week.empty:
                     src_counts = df_week['source'].value_counts().reset_index()
                     src_counts.columns = ['Источник', 'Кол-во']
-                    fig_pie = px.pie(src_counts, values='Кол-во', names='Источник', 
-                                    title="Источники лидов (за последние 7 дней)", hole=0.4)
+                    fig_pie = px.pie(src_counts, values='Кол-во', names='Источник', title="Источники лидов (ПОСЛЕДНИЕ 7 ДНЕЙ)", hole=0.4)
                     st.plotly_chart(fig_pie, use_container_width=True)
                 else:
-                    st.info("Нет данных по источникам за последние 7 дней.")
+                    st.info("Нет данных по источникам за неделю.")
             
+            # Динамика (за неделю)
             with col_dyn:
-                df_act = pd.DataFrame(get_leads(mode="active"))
-                if not df_act.empty:
-                    df_act['day'] = pd.to_datetime(df_act['created_at']).dt.date
-                    dyn = df_act[df_act['day'] >= last_w_date].groupby('day').size().reset_index(name='лидов')
-                    st.plotly_chart(px.area(dyn, x='day', y='лидов', title="Динамика новых лидов (7 дней)"), use_container_width=True)
+                if not df_week.empty:
+                    dyn = df_week.groupby('created_at_dt').size().reset_index(name='лидов')
+                    st.plotly_chart(px.area(dyn, x='created_at_dt', y='лидов', title="Динамика новых лидов (7 дней)"), use_container_width=True)
             
             st.divider()
-            # Статистика статусов за неделю
+            # Бары по статусам (за неделю)
             if not df_week.empty:
                 st_counts = df_week[df_week['status_color'] != 'white']['status_color'].value_counts().reset_index()
                 st_counts.columns = ['Статус', 'Кол-во']
                 st.plotly_chart(px.bar(st_counts, x='Кол-во', y='Статус', orientation='h', color='Статус', 
                                      color_discrete_map={'blue':'#B3D7FF','yellow':'#FFF59D','red':'#FFAB91','green':'#C8E6C9','purple':'#E1BEE7','pink':'#F8BBD0'}, 
-                                     title="Работа по статусам (за последние 7 дней)"), use_container_width=True)
+                                     title="Работа по статусам (ПОСЛЕДНИЕ 7 ДНЕЙ)"), use_container_width=True)
         else: st.info("База пуста")
 
-    # --- Остальные разделы без изменений ---
+    # --- Другие разделы ---
     elif choice == "👥 Список лидов":
         st.header("👥 Лиды")
         f1, f2, f3, f4 = st.columns([2, 1.2, 1, 1])
@@ -182,32 +207,26 @@ def main():
                     else: st.error(msg)
         with c2:
             st.subheader("📦 Архивация")
-            if st.session_state.get("role") == "superadmin" and st.button("📦 ВСЁ В АРХИВ"):
+            if user_role == "superadmin" and st.button("📦 ВСЁ В АРХИВ"):
                 set_archive_threshold(); st.rerun()
         with c3:
             st.subheader("🔥 Очистка")
-            if st.session_state.get("role") == "superadmin" and st.button("🔥 УДАЛИТЬ ВСЁ"):
+            if user_role == "superadmin" and st.button("🔥 УДАЛИТЬ ВСЁ"):
                 clear_all_leads(); st.rerun()
-        
-        st.divider()
-        st.subheader("🚀 Импорт")
-        uploaded_file = st.file_uploader("Загрузите XLSX файл", type=["xlsx"])
-        if uploaded_file and st.button("🚀 Загрузить данные"):
-            try:
-                df_up = pd.read_excel(uploaded_file, header=None)
-                for _, row in df_up.iterrows():
-                    v = list(row.values)
-                    if len(v) >= 3:
-                        add_lead(str(v[1]), str(v[2]), str(v[3]) if len(v)>3 else '', str(v[4]) if len(v)>4 else '', str(v[5]) if len(v)>5 else '', str(v[6]) if len(v)>6 else '', "Excel")
-                st.success("✅ Импорт завершен!"); st.rerun()
-            except Exception as e: st.error(f"Ошибка: {e}")
 
-    elif choice == "🔑 Администрирование" and st.session_state.get("role") == "superadmin":
+    elif choice == "🔑 Администрирование" and user_role == "superadmin":
         st.header("🔑 Доступы")
-        new_email = st.text_input("Email:")
-        if st.button("Добавить"): add_allowed_email(new_email); st.rerun()
+        c1, c2 = st.columns([3, 1])
+        new_mail = c1.text_input("Новый email:")
+        # Здесь мы пока просто добавляем мейл. Если хочешь хранить роли в БД, 
+        # нужно обновить database.py (добавить колонку role в allowed_emails)
+        if st.button("Добавить доступ"):
+            add_allowed_email(new_mail); st.success("Добавлено!"); st.rerun()
+        st.divider()
         for email in get_allowed_emails():
-            c1, c2 = st.columns([4, 1]); c1.write(f"• {email}")
-            if c2.button("Удалить", key=email): delete_allowed_email(email); st.rerun()
+            col1, col2 = st.columns([4, 1])
+            col1.write(f"• {email}")
+            if col2.button("Удалить", key=f"del_{email}"):
+                delete_allowed_email(email); st.rerun()
 
 if __name__ == "__main__": main()
