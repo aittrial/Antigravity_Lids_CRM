@@ -4,11 +4,9 @@ import streamlit as st
 from datetime import datetime
 from dotenv import load_dotenv
 
-# Загружаем переменные окружения для Railway
 load_dotenv()
 
 def get_connection():
-    """Прямое и надежное подключение к PostgreSQL."""
     try:
         conn = psycopg2.connect(
             host=os.getenv("DB_HOST"),
@@ -24,25 +22,12 @@ def get_connection():
         return None
 
 def init_db():
-    """Инициализация таблиц и проверка всех колонок."""
     conn = get_connection()
-    if not conn:
-        return
+    if not conn: return
     try:
         cur = conn.cursor()
-        
-        # Таблица доступов
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS allowed_emails (
-                email VARCHAR(255) PRIMARY KEY, 
-                role TEXT DEFAULT 'admin'
-            );
-        """)
-        
-        # Таблица настроек
+        cur.execute("CREATE TABLE IF NOT EXISTS allowed_emails (email VARCHAR(255) PRIMARY KEY, role TEXT DEFAULT 'admin');")
         cur.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);")
-        
-        # Основная таблица лидов
         cur.execute("""
             CREATE TABLE IF NOT EXISTS leads (
                 id SERIAL PRIMARY KEY,
@@ -59,31 +44,19 @@ def init_db():
                 archived_at TIMESTAMP DEFAULT NULL
             );
         """)
-        
-        # Явное добавление колонок (для стабильности)
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL;")
-        cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS preferred_time TEXT;")
-        cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS source TEXT;")
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS whatsapp TEXT;")
         cur.execute("ALTER TABLE allowed_emails ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'admin';")
-        
-        # Индексы для скорости работы при больших объемах
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_archived ON leads (archived_at);")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_created ON leads (created_at);")
-        
         conn.commit()
     finally:
         conn.close()
 
 def get_leads(search_query=None, start_date=None, end_date=None, mode="active", status_filter=None, source_filter=None, limit=50, offset=0):
     """
-    Основная функция получения данных. 
-    БЕЗ жестких лимитов в режиме 'all' для аналитики.
-    С пагинацией для списков.
+    ИСПРАВЛЕНО: Теперь лимит по умолчанию 50, а не 10.
     """
     conn = get_connection()
-    if not conn:
-        return []
+    if not conn: return []
     try:
         cur = conn.cursor()
         query = "SELECT * FROM leads WHERE 1=1"
@@ -93,13 +66,9 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
             query += " AND archived_at IS NULL"
         elif mode == "archive":
             query += " AND archived_at IS NOT NULL"
-        # Если mode == "all", фильтр по архиву не накладывается (для аналитики)
 
         if status_filter and status_filter != "Все":
-            status_map = {
-                "Белый": "white", "Синий": "blue", "Желтый": "yellow", 
-                "Красный": "red", "Зеленый": "green", "Фиолетовый": "purple", "Розовый": "pink"
-            }
+            status_map = {"Белый": "white", "Синий": "blue", "Желтый": "yellow", "Красный": "red", "Зеленый": "green", "Фиолетовый": "purple", "Розовый": "pink"}
             query += " AND status_color = %s"
             params.append(status_map.get(status_filter, "white"))
 
@@ -121,7 +90,7 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
 
         query += " ORDER BY id DESC"
         
-        # Для аналитики (mode='all') мы не ограничиваем выборку
+        # ДЛЯ АНАЛИТИКИ УБИРАЕМ ЛИМИТ
         if mode != "all":
             query += " LIMIT %s OFFSET %s"
             params.append(limit)
@@ -163,7 +132,6 @@ def update_lead(lead_id, **kwargs):
         conn.close()
 
 def delete_lead(lead_id):
-    """Явное удаление лида."""
     conn = get_connection()
     if not conn: return
     try:
@@ -179,8 +147,7 @@ def get_allowed_emails():
     try:
         cur = conn.cursor()
         cur.execute("SELECT email, role FROM allowed_emails")
-        rows = cur.fetchall()
-        return [{'email': r[0], 'role': r[1]} for r in rows]
+        return [{'email': r[0], 'role': r[1]} for r in cur.fetchall()]
     finally:
         conn.close()
 
