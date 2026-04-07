@@ -11,40 +11,39 @@ def check_password():
         return True
 
     st.title("🔐 Вход в систему")
-
-    tab1, tab2 = st.tabs(["🔑 Суперадмин", "📧 Сотрудник (Админ/Аналитик)"])
+    tab1, tab2 = st.tabs(["🔑 Суперадмин", "📧 Сотрудник"])
 
     with tab1:
-        master_pass = st.text_input("Введите мастер-пароль", type="password", key="super_pass")
-        if st.button("Войти как Суперадмин"):
+        # Уникальный ключ для суперадмина
+        master_pass = st.text_input("Мастер-пароль", type="password", key="super_pass_field")
+        if st.button("Войти как Суперадмин", key="super_btn"):
             if master_pass == os.getenv("ADMIN_PASSWORD"):
                 st.session_state["authenticated"] = True
                 st.session_state["role"] = "superadmin"
                 st.rerun()
             else:
-                st.error("Неверный мастер-пароль")
+                st.error("Неверный пароль")
 
     with tab2:
-        email_input = st.text_input("Введите ваш Email", key="user_email_login").lower().strip()
-        if st.button("Войти по Email"):
-            if email_input:
+        email_in = st.text_input("Ваш Email", key="email_field").lower().strip()
+        if st.button("Войти по Email", key="email_btn"):
+            if email_in:
                 conn = get_connection()
                 if conn:
                     try:
                         cur = conn.cursor()
-                        cur.execute("SELECT role FROM allowed_emails WHERE email = %s", (email_input,))
+                        cur.execute("SELECT role FROM allowed_emails WHERE email = %s", (email_in,))
                         res = cur.fetchone()
-                        if res:
+                        if res and res[0]: # Проверяем, что результат есть и роль не пустая
                             st.session_state["authenticated"] = True
-                            st.session_state["role"] = res[0] # Роль подтянется автоматически (admin или analyst)
+                            st.session_state["role"] = str(res[0])
                             st.rerun()
                         else:
-                            st.error("Email не найден в списке разрешенных")
+                            st.error("Email не найден или роль не назначена")
                     finally:
                         conn.close()
             else:
                 st.warning("Введите Email")
-            
     return False
 
 def logout():
