@@ -3,48 +3,47 @@ import os
 from database import get_connection
 
 def check_password():
-    """Возвращает True, если пароль верный и email разрешен."""
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
+        st.session_state["role"] = None
 
     if st.session_state["authenticated"]:
         return True
 
-    st.title("🔐 Вход в CRM")
-    
-    email_input = st.text_input("Email", key="login_email").lower().strip()
-    password_input = st.text_input("Пароль", type="password", key="login_pass")
+    st.title("🔐 Вход в систему")
 
-    if st.button("Войти"):
-        # 1. Проверка главного пароля из секретов Railway
-        if password_input == os.getenv("ADMIN_PASSWORD"):
-            
-            # 2. Ищем email в базе данных
-            conn = get_connection()
-            if conn:
-                try:
-                    cur = conn.cursor()
-                    cur.execute("SELECT role FROM allowed_emails WHERE email = %s", (email_input,))
-                    result = cur.fetchone()
-                    
-                    if result:
-                        # Email найден, забираем его роль
-                        st.session_state["authenticated"] = True
-                        st.session_state["user_email"] = email_input
-                        st.session_state["role"] = result[0] # Роль из базы (admin/analyst/superadmin)
-                        
-                        # Если это твой личный мейл из секретов, даем superadmin
-                        if email_input == os.getenv("ADMIN_EMAIL"):
-                            st.session_state["role"] = "superadmin"
-                        
-                        st.success(f"Добро пожаловать, роль: {st.session_state['role']}")
-                        st.rerun()
-                    else:
-                        st.error("🚫 Доступ запрещен: этого Email нет в списке разрешенных.")
-                finally:
-                    conn.close()
-        else:
-            st.error("🔑 Неверный пароль")
+    tab1, tab2 = st.tabs(["🔑 Суперадмин", "📧 Сотрудник (Админ/Аналитик)"])
+
+    with tab1:
+        master_pass = st.text_input("Введите мастер-пароль", type="password", key="super_pass")
+        if st.button("Войти как Суперадмин"):
+            if master_pass == os.getenv("ADMIN_PASSWORD"):
+                st.session_state["authenticated"] = True
+                st.session_state["role"] = "superadmin"
+                st.rerun()
+            else:
+                st.error("Неверный мастер-пароль")
+
+    with tab2:
+        email_input = st.text_input("Введите ваш Email", key="user_email_login").lower().strip()
+        if st.button("Войти по Email"):
+            if email_input:
+                conn = get_connection()
+                if conn:
+                    try:
+                        cur = conn.cursor()
+                        cur.execute("SELECT role FROM allowed_emails WHERE email = %s", (email_input,))
+                        res = cur.fetchone()
+                        if res:
+                            st.session_state["authenticated"] = True
+                            st.session_state["role"] = res[0] # Роль подтянется автоматически (admin или analyst)
+                            st.rerun()
+                        else:
+                            st.error("Email не найден в списке разрешенных")
+                    finally:
+                        conn.close()
+            else:
+                st.warning("Введите Email")
             
     return False
 

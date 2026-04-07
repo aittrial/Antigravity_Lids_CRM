@@ -79,23 +79,20 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
 
 def main():
     if not check_password(): return
-    
-    # Роль подтягивается из сессии, которую установил auth.py
-    user_role = st.session_state.get("role", "admin")
+    user_role = st.session_state.get("role")
     st.sidebar.markdown(f"### {APP_TITLE}")
-    st.sidebar.info(f"Вы вошли как: {user_role}")
     
-    # Меню в зависимости от роли
+    # Роли доступа
     if user_role == "analyst":
         menu = ["📊 Аналитика"]
     else:
         menu = ["📊 Аналитика", "👥 Список лидов", "➕ Новый лид", "📂 База данных"]
-        if user_role == "superadmin":
-            menu.append("🔑 Администрирование")
+        if user_role == "superadmin": menu.append("🔑 Администрирование")
             
     choice = st.sidebar.selectbox("Навигация", menu)
     if st.sidebar.button("🚪 Выход"): logout()
 
+    # --- Аналитика ---
     if choice == "📊 Аналитика":
         st.header("📊 Аналитика")
         df_all = pd.DataFrame(get_leads(mode="all"))
@@ -129,24 +126,26 @@ def main():
             c_src, c_dyn = st.columns(2)
             with c_src:
                 if not df_week.empty:
-                    fig_src = px.pie(df_week['source'].value_counts().reset_index(), values='count', names='source', title="Источники лидов (7 дней)", hole=0.4)
+                    fig_src = px.pie(df_week['source'].value_counts().reset_index(), values='count', names='source', title="Источники (7 дней)", hole=0.4)
                     st.plotly_chart(fig_src, use_container_width=True)
             with c_dyn:
                 if not df_week.empty:
                     dyn = df_week.groupby('date_only').size().reset_index(name='count')
-                    st.plotly_chart(px.area(dyn, x='date_only', y='count', title="Динамика новых лидов (7 дней)"), use_container_width=True)
+                    st.plotly_chart(px.area(dyn, x='date_only', y='count', title="Динамика (7 дней)"), use_container_width=True)
             
+            # ГРАФИК ПО ЦВЕТАМ (Возвращен)
             st.divider()
-            st.subheader("🎨 Работа по статусам (ПОСЛЕДНИЕ 7 ДНЕЙ)")
+            st.subheader("🎨 Работа по статусам (7 дней)")
             if not df_week.empty:
                 st_counts = df_week[df_week['status_color'] != 'white']['status_color'].value_counts().reset_index()
                 st_counts.columns = ['Статус', 'Кол-во']
-                color_map = {'blue':'#B3D7FF','yellow':'#FFF59D','red':'#FFAB91','green':'#C8E6C9','purple':'#E1BEE7','pink':'#F8BBD0'}
-                fig_bar = px.bar(st_counts, x='Кол-во', y='Статус', orientation='h', color='Статус', color_discrete_map=color_map)
+                c_map = {'blue':'#B3D7FF','yellow':'#FFF59D','red':'#FFAB91','green':'#C8E6C9','purple':'#E1BEE7','pink':'#F8BBD0'}
+                fig_bar = px.bar(st_counts, x='Кол-во', y='Статус', orientation='h', color='Статус', color_discrete_map=c_map)
                 st.plotly_chart(fig_bar, use_container_width=True)
         else: st.info("База пуста")
 
-    elif choice == "👥 Список лидов" and user_role != "analyst":
+    # --- Список лидов ---
+    elif choice == "👥 Список лидов":
         st.header("👥 Лиды")
         f1, f2, f3, f4 = st.columns([2, 1.2, 1, 1])
         s_query, d_range = f1.text_input("🔍 Поиск"), f2.date_input("📅 Дата", value=(date.today()-timedelta(days=30), date.today()))
@@ -156,7 +155,8 @@ def main():
         with t1: render_leads_list(get_leads(s_query, st_d, en_d, mode="active", status_filter=c_filt, source_filter=src_filt), can_archive=True)
         with t2: render_leads_list(get_leads(s_query, st_d, en_d, mode="archive", status_filter=c_filt, source_filter=src_filt))
 
-    elif choice == "➕ Новый лид" and user_role != "analyst":
+    # --- Новый лид ---
+    elif choice == "➕ Новый лид":
         st.header("➕ Новый лид")
         with st.form("new_lead_form", clear_on_submit=True):
             c1, c2 = st.columns(2); fn, ph = c1.text_input("ФИО"), c2.text_input("Тел")
@@ -169,7 +169,8 @@ def main():
                     add_lead(fn, ph, em, crs, tm, src, cmm, stt, whatsapp=wa)
                     st.success("✅ Лид успешно добавлен!")
 
-    elif choice == "📂 База данных" and user_role != "analyst":
+    # --- База данных ---
+    elif choice == "📂 База данных":
         st.header("📂 Управление базой")
         c1, c2, c3 = st.columns(3)
         all_l = get_leads(mode="all")
@@ -191,7 +192,7 @@ def main():
         st.divider()
         st.subheader("🚀 Импорт данных")
         uploaded_file = st.file_uploader("Загрузите XLSX файл", type=["xlsx"])
-        if uploaded_file and st.button("🚀 Запустить"):
+        if uploaded_file and st.button("🚀 Запустить импорт"):
             try:
                 df_up = pd.read_excel(uploaded_file, header=None)
                 for _, r in df_up.iterrows():
@@ -200,6 +201,7 @@ def main():
                 st.success("✅ Данные загружены!"); st.rerun()
             except Exception as e: st.error(f"Ошибка: {e}")
 
+    # --- Администрирование ---
     elif choice == "🔑 Администрирование" and user_role == "superadmin":
         st.header("🔑 Доступы")
         c_m, c_r = st.columns([3, 1])
