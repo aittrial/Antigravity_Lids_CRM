@@ -3,7 +3,7 @@ import os
 from database import get_connection
 
 def check_password():
-    """Проверка входа: Суперадмин по паролю, сотрудники по Email."""
+    """Проверка входа: Суперадмин по MASTER_PASSWORD, сотрудники по Email."""
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
         st.session_state["role"] = None
@@ -13,22 +13,22 @@ def check_password():
 
     st.title("🔐 Вход в CRM")
 
-    # Создаем две вкладки для разных типов входа
+    # Создаем две вкладки
     tab_super, tab_staff = st.tabs(["🔑 Суперадмин", "📧 Сотрудник"])
 
     with tab_super:
-        # Получаем пароль из переменных окружения
-        correct_password = os.getenv("ADMIN_PASSWORD")
+        # ВНИМАНИЕ: Берем именно ту переменную, которая у тебя в Railway
+        correct_password = os.getenv("MASTER_PASSWORD")
         
         master_pass = st.text_input("Введите мастер-пароль", type="password", key="super_pass_input")
         
         if st.button("Войти как Суперадмин", key="btn_super_auth"):
             if not correct_password:
-                st.error("⚠️ Критическая ошибка: Пароль суперадмина не настроен в Railway (переменная ADMIN_PASSWORD пуста).")
+                st.error("⚠️ Ошибка: Переменная MASTER_PASSWORD не найдена в настройках Railway.")
             elif master_pass == correct_password:
                 st.session_state["authenticated"] = True
                 st.session_state["role"] = "superadmin"
-                st.success("Доступ разрешен (Superadmin)")
+                st.success("Доступ разрешен!")
                 st.rerun()
             else:
                 st.error("❌ Неверный мастер-пароль")
@@ -42,7 +42,6 @@ def check_password():
                 if conn:
                     try:
                         cur = conn.cursor()
-                        # Ищем роль пользователя по его имейлу
                         cur.execute("SELECT role FROM allowed_emails WHERE email = %s", (email_in,))
                         result = cur.fetchone()
                         
@@ -52,7 +51,7 @@ def check_password():
                             st.success(f"Доступ разрешен (Роль: {st.session_state['role']})")
                             st.rerun()
                         else:
-                            st.error("🚫 Доступ запрещен: Email не найден в базе или роль не назначена.")
+                            st.error("🚫 Доступ запрещен: Email не найден в базе.")
                     finally:
                         conn.close()
             else:
@@ -61,7 +60,6 @@ def check_password():
     return False
 
 def logout():
-    """Сброс сессии при выходе."""
     st.session_state["authenticated"] = False
     st.session_state["role"] = None
     st.rerun()
