@@ -13,7 +13,8 @@ from database import (
 )
 from auth import check_password, logout
 
-APP_TITLE = "📈 Leads_CRM | Lead Management System"
+# ВИЗУАЛЬНЫЙ МАРКЕР ДЛЯ ПРОВЕРКИ ДЕПЛОЯ
+APP_TITLE = "📈 Leads_CRM | v1.1-TEST"
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 init_db()
 
@@ -62,13 +63,11 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
         with st.expander("🛠 Управление"):
             c1, c2, c3 = st.columns([1, 2, 1])
             
-            # Кнопка WhatsApp
             wa_val = row.get('whatsapp') if row.get('whatsapp') else row['phone']
             p_cl = ''.join(filter(str.isdigit, str(wa_val)))
             with c1: 
                 st.markdown(f'''<a href="https://wa.me/{p_cl}" target="_blank"><button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; width:100%;">💬 WhatsApp</button></a>''', unsafe_allow_html=True)
             
-            # Блок для копирования (Copy to clipboard)
             with c2:
                 copy_parts = [f"ФИО: {row['full_name']}", f"Тел: {row['phone']}"]
                 if row.get('whatsapp'): copy_parts.append(f"WhatsApp: {row['whatsapp']}")
@@ -83,7 +82,6 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
             
             st.divider()
             
-            # ПОЛЯ УПРАВЛЕНИЯ (ВОССТАНОВЛЕНО)
             col_edit1, col_edit2 = st.columns(2)
             with col_edit1:
                 n_fn = st.text_input("Изменить ФИО", row['full_name'], key=f"fn_{row['id']}")
@@ -149,7 +147,7 @@ def main():
         st.header("👥 Лиды")
         f1, f2, f3, f4 = st.columns([2, 1.2, 1, 1])
         s_query = f1.text_input("🔍 Поиск")
-        d_range = f2.date_input("📅 Даты", value=(date.today()-timedelta(days=30), date.today()))
+        d_range = f2.date_input("📅 Даты", value=(date.today()-timedelta(days=365), date.today()))
         c_filt, src_filt = f3.selectbox("🎨 Статус", FILTER_COLOR_MAP), f4.selectbox("📡 Источник", FILTER_SOURCE_MAP)
         st_d, en_d = (d_range[0], d_range[1]) if len(d_range) == 2 else (None, None)
         
@@ -159,9 +157,10 @@ def main():
             render_leads_list(data_active, start_order=1, can_archive=True)
 
         with t2:
-            # ТОЧЕЧНОЕ ИСПРАВЛЕНИЕ НАВИГАЦИИ
+            # ИСПРАВЛЕННЫЙ БЛОК НАВИГАЦИИ АРХИВА
             limit_arch = 50
-            offset_arch = st.session_state.archive_page_number * limit_arch
+            current_page = st.session_state.archive_page_number
+            offset_arch = current_page * limit_arch
             data_archive = get_leads(s_query, st_d, en_d, mode="archive", status_filter=c_filt, source_filter=src_filt, limit=limit_arch, offset=offset_arch)
             
             render_leads_list(data_archive, start_order=offset_arch + 1)
@@ -169,13 +168,13 @@ def main():
             st.write("---")
             nav1, nav2, nav3 = st.columns([1, 2, 1])
             with nav1:
-                if st.button("⬅️ Назад", key="btn_arc_p") and st.session_state.archive_page_number > 0:
+                if st.button("⬅️ Назад", key="btn_arc_p") and current_page > 0:
                     st.session_state.archive_page_number -= 1; st.rerun()
             with nav2: 
-                st.markdown(f"<center>Страница {st.session_state.archive_page_number + 1}</center>", unsafe_allow_html=True)
+                st.markdown(f"<center>Страница {current_page + 1}</center>", unsafe_allow_html=True)
             with nav3:
-                # Кнопка "Вперед" активна, если получено ровно 50 лидов (значит, есть еще)
-                if len(data_archive) >= limit_arch:
+                # МЕНЯЕМ ЛОГИКУ: Если мы получили хотя бы 1 лид, даем возможность нажать "Вперед"
+                if len(data_archive) > 0:
                     if st.button("Вперед ➡️", key="btn_arc_n"):
                         st.session_state.archive_page_number += 1; st.rerun()
                 else:
