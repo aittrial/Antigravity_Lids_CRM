@@ -199,11 +199,11 @@ def main():
             if st.form_submit_button("Создать"):
                 if fn and ph:
                     add_lead(fn, ph, email=em, course_name=crs, source=src, whatsapp=wa, comment=cm)
-                    send_telegram_notification(fn, ph, crs, src, email=em, whatsapp=wa, comment=cm)
+                    # send_telegram_notification(fn, ph, crs, src, email=em, whatsapp=wa, comment=cm)
                     
                     # ИНДИКАЦИЯ УСПЕХА НА 30 СЕКУНД
                     placeholder = st.empty()
-                    placeholder.success(f"✅ Лид '{fn}' успешно добавлен и отправлен в Telegram!")
+                    placeholder.success(f"✅ Лид '{fn}' успешно добавлен!")
                     
                     import time
                     time.sleep(30)
