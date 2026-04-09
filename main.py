@@ -14,7 +14,7 @@ from database import (
 from auth import check_password, logout
 
 # ВИЗУАЛЬНЫЙ МАРКЕР ДЛЯ ПРОВЕРКИ ДЕПЛОЯ
-APP_TITLE = "📈 Leads_CRM | v1.2-FINAL-ARCHIVE-FIX"
+APP_TITLE = "📈 Leads_CRM_Tel-Ran | v1.2"
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 init_db()
 
