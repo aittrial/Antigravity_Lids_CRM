@@ -70,6 +70,7 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
             
             with c2:
                 copy_parts = [f"ФИО: {row['full_name']}", f"Тел: {row['phone']}"]
+                if row.get('preferred_time'): copy_parts.append(f"Время: {row['preferred_time']}")
                 if row.get('whatsapp'): copy_parts.append(f"WhatsApp: {row['whatsapp']}")
                 if row.get('email'): copy_parts.append(f"Email: {row['email']}")
                 if row.get('course_name'): copy_parts.append(f"Курс: {row['course_name']}")
@@ -87,13 +88,14 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
                 n_fn = st.text_input("Изменить ФИО", row['full_name'], key=f"fn_{row['id']}")
                 n_ph = st.text_input("Изменить Тел", row['phone'], key=f"ph_{row['id']}")
                 n_wa = st.text_input("Изменить WhatsApp", row.get('whatsapp', ''), key=f"wa_{row['id']}")
+                n_tm = st.text_input("Изменить Время звонка", row.get('preferred_time', ''), key=f"tm_{row['id']}")
             with col_edit2:
                 n_em = st.text_input("Изменить Email", row.get('email', ''), key=f"em_{row['id']}")
                 n_sc = st.selectbox("Изменить Статус", COLOR_KEYS, index=COLOR_KEYS.index(row['status_color']), key=f"sc_{row['id']}")
                 n_cm = st.text_area("Комментарий", row.get('comment', ''), key=f"cm_{row['id']}", height=68)
             
             if st.button("💾 Сохранить изменения", key=f"save_{row['id']}", use_container_width=True):
-                update_lead(row['id'], full_name=n_fn, phone=n_ph, whatsapp=n_wa, email=n_em, status_color=n_sc, comment=n_cm)
+                update_lead(row['id'], full_name=n_fn, phone=n_ph, whatsapp=n_wa, email=n_em, status_color=n_sc, comment=n_cm, preferred_time=n_tm)
                 st.rerun()
 
 def main():
@@ -101,6 +103,7 @@ def main():
     user_role = st.session_state.get("role", "admin")
     
     if 'archive_page_number' not in st.session_state: st.session_state.archive_page_number = 0
+    if 'form_key' not in st.session_state: st.session_state.form_key = 0
 
     st.sidebar.markdown(f"### {APP_TITLE}")
     
@@ -183,12 +186,13 @@ def main():
 
     elif choice == "➕ Новый лид":
         st.header("➕ Новый лид")
-        with st.form("f_new"):
+        with st.form(key=f"f_new_{st.session_state.form_key}"):
             col_n1, col_n2 = st.columns(2)
             with col_n1:
                 fn = st.text_input("ФИО")
                 ph = st.text_input("Тел")
                 wa = st.text_input("WhatsApp (если другой)")
+                tm = st.text_input("Время для звонка")
             with col_n2:
                 em = st.text_input("Email")
                 crs = st.selectbox("Курс", COURSE_OPTIONS)
@@ -198,15 +202,17 @@ def main():
             
             if st.form_submit_button("Создать"):
                 if fn and ph:
-                    add_lead(fn, ph, email=em, course_name=crs, source=src, whatsapp=wa, comment=cm)
-                    # send_telegram_notification(fn, ph, crs, src, email=em, whatsapp=wa, comment=cm)
+                    add_lead(fn, ph, email=em, course_name=crs, source=src, whatsapp=wa, comment=cm, preferred_time=tm)
                     
-                    # ИНДИКАЦИЯ УСПЕХА НА 30 СЕКУНД
+                    # ОЧИСТКА ФОРМЫ
+                    st.session_state.form_key += 1
+                    
+                    # ИНДИКАЦИЯ УСПЕХА
                     placeholder = st.empty()
                     placeholder.success(f"✅ Лид '{fn}' успешно добавлен!")
                     
                     import time
-                    time.sleep(30)
+                    time.sleep(5)
                     placeholder.empty()
                     
                     st.rerun()
