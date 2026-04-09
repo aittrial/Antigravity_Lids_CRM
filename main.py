@@ -58,7 +58,11 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
     for i, row in enumerate(leads_data):
         color = get_status_color(row['status_color'])
         date_s = row['created_at'].strftime("%d.%m.%Y %H:%M")
-        st.markdown(f'<div style="background-color:{color}; border-radius:10px; padding:12px; margin-bottom:10px; border:2px solid #444; color: black !important;"><b style="color: black !important; font-size: 14px;">#{start_order+i} | 📅 {date_s} | {row["full_name"]} | {row["phone"]}</b></div>', unsafe_allow_html=True)
+        
+        # Динамический заголовок с временем звонка
+        pref_time = f" | ⏰ {row['preferred_time']}" if row.get('preferred_time') else ""
+        
+        st.markdown(f'<div style="background-color:{color}; border-radius:10px; padding:12px; margin-bottom:10px; border:2px solid #444; color: black !important;"><b style="color: black !important; font-size: 14px;">#{start_order+i} | 📅 {date_s}{pref_time} | {row["full_name"]} | {row["phone"]}</b></div>', unsafe_allow_html=True)
         
         with st.expander("🛠 Управление"):
             c1, c2, c3 = st.columns([1, 2, 1])
@@ -74,6 +78,7 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
                 if row.get('whatsapp'): copy_parts.append(f"WhatsApp: {row['whatsapp']}")
                 if row.get('email'): copy_parts.append(f"Email: {row['email']}")
                 if row.get('course_name'): copy_parts.append(f"Курс: {row['course_name']}")
+                if row.get('source'): copy_parts.append(f"Источник: {row['source']}")
                 if row.get('comment'): copy_parts.append(f"Комментарий: {row['comment']}")
                 st.code("\n".join(copy_parts), language=None)
             
@@ -92,10 +97,16 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
             with col_edit2:
                 n_em = st.text_input("Изменить Email", row.get('email', ''), key=f"em_{row['id']}")
                 n_sc = st.selectbox("Изменить Статус", COLOR_KEYS, index=COLOR_KEYS.index(row['status_color']), key=f"sc_{row['id']}")
+                
+                # Выпадающий список для источника
+                current_src = row.get('source', 'Other')
+                src_idx = SOURCE_OPTIONS.index(current_src) if current_src in SOURCE_OPTIONS else (len(SOURCE_OPTIONS)-1)
+                n_src = st.selectbox("Изменить Источник", SOURCE_OPTIONS, index=src_idx, key=f"src_{row['id']}")
+                
                 n_cm = st.text_area("Комментарий", row.get('comment', ''), key=f"cm_{row['id']}", height=68)
             
             if st.button("💾 Сохранить изменения", key=f"save_{row['id']}", use_container_width=True):
-                update_lead(row['id'], full_name=n_fn, phone=n_ph, whatsapp=n_wa, email=n_em, status_color=n_sc, comment=n_cm, preferred_time=n_tm)
+                update_lead(row['id'], full_name=n_fn, phone=n_ph, whatsapp=n_wa, email=n_em, status_color=n_sc, comment=n_cm, preferred_time=n_tm, source=n_src)
                 st.rerun()
 
 def main():
