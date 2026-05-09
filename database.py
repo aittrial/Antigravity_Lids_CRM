@@ -53,9 +53,7 @@ def init_db():
         conn.close()
 
 def get_leads(search_query=None, start_date=None, end_date=None, mode="active", status_filter=None, source_filter=None, limit=50, offset=0):
-    st.write(f"🔍 DB-1: get_leads(mode={mode}) — вызов get_connection()")
     conn = get_connection()
-    st.write(f"🔍 DB-2: get_connection() → {'OK' if conn else 'None (ошибка!)'}")
     if not conn: return []
     try:
         cur = conn.cursor()
@@ -90,22 +88,15 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
 
         query += " ORDER BY id DESC"
 
-        if mode == "archive":
-            safe_limit = int(limit)
-            safe_offset = int(offset)
-            query += f" LIMIT {safe_limit} OFFSET {safe_offset}"
-        elif mode != "all":
+        if mode != "all":
             safe_limit = int(limit)
             safe_offset = int(offset)
             query += f" LIMIT {safe_limit} OFFSET {safe_offset}"
 
-        st.write(f"🔍 DB-3: cur.execute() — запрос: `{query[:100]}`")
         cur.execute(query, params)
-        st.write("🔍 DB-4: execute OK — fetchall()...")
-        rows = cur.fetchall()
-        st.write(f"🔍 DB-5: fetchall OK — {len(rows)} строк")
-
         colnames = [desc[0] for desc in cur.description]
+        rows = cur.fetchall()
+
         leads = []
         for row in rows:
             leads.append(dict(zip(colnames, row)))

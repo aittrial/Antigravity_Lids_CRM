@@ -14,7 +14,7 @@ from database import (
 from auth import check_password, logout
 
 # ВИЗУАЛЬНЫЙ МАРКЕР ДЛЯ ПРОВЕРКИ ДЕПЛОЯ
-APP_TITLE = "📈 Leads_CRM_Tel-Ran | v1.3-TEST"
+APP_TITLE = "📈 Leads_CRM_Tel-Ran | v1.3"
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 init_db()
 
@@ -55,15 +55,10 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
     if not leads_data:
         st.info("Лидов не найдено.")
         return
-    st.write(f"🔍 R-0: начало render, {len(leads_data)} лидов")
     for i, row in enumerate(leads_data):
-        st.write(f"🔍 R-{i+1}: лид id={row['id']}, status_color={repr(row['status_color'])}")
         color = get_status_color(row['status_color'])
         date_s = row['created_at'].strftime("%d.%m.%Y %H:%M")
-
-        # Динамический заголовок с временем звонка
         pref_time = f" | ⏰ {row['preferred_time']}" if row.get('preferred_time') else ""
-
         st.markdown(f'<div style="background-color:{color}; border-radius:10px; padding:12px; margin-bottom:10px; border:2px solid #444; color: black !important;"><b style="color: black !important; font-size: 14px;">#{start_order+i} | 📅 {date_s}{pref_time} | {row["full_name"]} | {row["phone"]}</b></div>', unsafe_allow_html=True)
 
         with st.expander("🛠 Управление"):
@@ -116,6 +111,7 @@ def main():
     user_role = st.session_state.get("role", "admin")
     
     if 'archive_page_number' not in st.session_state: st.session_state.archive_page_number = 0
+    if 'active_page_number' not in st.session_state: st.session_state.active_page_number = 0
     if 'form_key' not in st.session_state: st.session_state.form_key = 0
 
     st.sidebar.markdown(f"### {APP_TITLE}")
@@ -169,18 +165,31 @@ def main():
         
         t1, t2 = st.tabs(["🔥 Активные", "📦 Архив"])
         with t1:
-            st.write("🔍 M-1: перед get_leads(active)")
-            data_active = get_leads(s_query, st_d, en_d, mode="active", status_filter=c_filt, source_filter=src_filt, limit=10, offset=0)
-            st.write(f"🔍 M-2: get_leads вернул {len(data_active)} лидов")
-            render_leads_list(data_active, start_order=1, can_archive=True)
-            st.write("🔍 M-3: render_leads_list завершён")
+            limit_act = 20
+            cur_act_page = st.session_state.active_page_number
+            offset_act = cur_act_page * limit_act
+            data_active = get_leads(s_query, st_d, en_d, mode="active", status_filter=c_filt, source_filter=src_filt, limit=limit_act, offset=offset_act)
+            render_leads_list(data_active, start_order=offset_act + 1, can_archive=True)
+            st.write("---")
+            anav1, anav2, anav3 = st.columns([1, 2, 1])
+            with anav1:
+                if st.button("⬅️ Назад", key="btn_act_p") and cur_act_page > 0:
+                    st.session_state.active_page_number -= 1; st.rerun()
+            with anav2:
+                st.markdown(f"<center>Страница {cur_act_page + 1}</center>", unsafe_allow_html=True)
+            with anav3:
+                if len(data_active) == limit_act:
+                    if st.button("Вперед ➡️", key="btn_act_n"):
+                        st.session_state.active_page_number += 1; st.rerun()
+                else:
+                    st.info("Конец списка")
 
         with t2:
             if st.button("📂 Загрузить архив", use_container_width=True, key="btn_load_arch"):
                 st.session_state['archive_loaded'] = True
 
             if st.session_state.get('archive_loaded', False):
-                limit_arch = 50
+                limit_arch = 20
                 current_page = st.session_state.archive_page_number
                 offset_arch = current_page * limit_arch
                 data_archive = get_leads(s_query, None, None, mode="archive", status_filter=c_filt, source_filter=src_filt, limit=limit_arch, offset=offset_arch)
@@ -194,7 +203,7 @@ def main():
                 with nav2:
                     st.markdown(f"<center>Страница {current_page + 1}</center>", unsafe_allow_html=True)
                 with nav3:
-                    if len(data_archive) > 0:
+                    if len(data_archive) == limit_arch:
                         if st.button("Вперед ➡️", key="btn_arc_n"):
                             st.session_state.archive_page_number += 1; st.rerun()
                     else:
