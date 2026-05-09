@@ -278,10 +278,41 @@ def main():
         if up_f and st.button("🚀 Начать", use_container_width=True):
             try:
                 df_im = pd.read_excel(up_f)
+                df_im.columns = [str(c).lower().strip() for c in df_im.columns]
+                col_aliases = {
+                    'full_name':      ['full_name', 'фио', 'имя', 'name'],
+                    'phone':          ['phone', 'телефон', 'тел'],
+                    'email':          ['email', 'почта', 'e-mail'],
+                    'course_name':    ['course_name', 'курс', 'course'],
+                    'whatsapp':       ['whatsapp', 'вотсап'],
+                    'preferred_time': ['preferred_time', 'время', 'время звонка'],
+                    'source':         ['source', 'источник'],
+                    'comment':        ['comment', 'комментарий'],
+                    'status_color':   ['status_color', 'статус'],
+                }
+                def _gv(row, field):
+                    for alias in col_aliases[field]:
+                        if alias in row.index and pd.notna(row[alias]) and str(row[alias]).strip():
+                            return str(row[alias]).strip()
+                    return ''
+                count = 0
                 for _, r in df_im.iterrows():
-                    add_lead(str(r.get('full_name','')), str(r.get('phone','')), source="Excel Import")
-                st.success("✅ Импорт завершен!"); st.rerun()
-            except Exception as e: st.error(f"Ошибка: {e}")
+                    fn, ph = _gv(r, 'full_name'), _gv(r, 'phone')
+                    if not fn and not ph:
+                        continue
+                    src = _gv(r, 'source')
+                    if src not in SOURCE_OPTIONS:
+                        src = 'Other'
+                    sc = _gv(r, 'status_color')
+                    if sc not in COLOR_KEYS:
+                        sc = 'white'
+                    add_lead(fn, ph, email=_gv(r, 'email'), course_name=_gv(r, 'course_name'),
+                             whatsapp=_gv(r, 'whatsapp'), preferred_time=_gv(r, 'preferred_time'),
+                             source=src, comment=_gv(r, 'comment'), status_color=sc)
+                    count += 1
+                st.success(f"✅ Импорт завершён: {count} лидов"); st.rerun()
+            except Exception as e:
+                st.error(f"Ошибка: {e}")
 
     elif choice == "🔑 Администрирование" and user_role == "superadmin":
         st.header("🔑 Доступы")
