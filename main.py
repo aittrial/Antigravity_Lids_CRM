@@ -162,7 +162,13 @@ def main():
         d_range = f2.date_input("📅 Даты", value=(date.today()-timedelta(days=365), date.today()))
         c_filt, src_filt = f3.selectbox("🎨 Статус", FILTER_COLOR_MAP), f4.selectbox("📡 Источник", FILTER_SOURCE_MAP)
         st_d, en_d = (d_range[0], d_range[1]) if len(d_range) == 2 else (None, None)
-        
+
+        filter_key = (s_query, str(st_d), str(en_d), c_filt, src_filt)
+        if st.session_state.get('last_filter_key') != filter_key:
+            st.session_state.active_page_number = 0
+            st.session_state.archive_page_number = 0
+            st.session_state['last_filter_key'] = filter_key
+
         t1, t2 = st.tabs(["🔥 Активные", "📦 Архив"])
         with t1:
             limit_act = 25
