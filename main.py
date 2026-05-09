@@ -16,7 +16,9 @@ from auth import check_password, logout
 # ВИЗУАЛЬНЫЙ МАРКЕР ДЛЯ ПРОВЕРКИ ДЕПЛОЯ
 APP_TITLE = "📈 Leads_CRM_Tel-Ran | v1.2"
 st.set_page_config(page_title=APP_TITLE, layout="wide")
-init_db()
+if 'db_initialized' not in st.session_state:
+    init_db()
+    st.session_state['db_initialized'] = True
 
 TELE_TOKEN = "8500719540:AAG3KzK7aP3FyZoE-QmRPysKJKEO9KAHWwU"
 TELE_CHAT_ID = "-1003793353079"
