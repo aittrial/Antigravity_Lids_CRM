@@ -53,7 +53,9 @@ def init_db():
         conn.close()
 
 def get_leads(search_query=None, start_date=None, end_date=None, mode="active", status_filter=None, source_filter=None, limit=50, offset=0):
+    st.write(f"🔍 DB-1: get_leads(mode={mode}) — вызов get_connection()")
     conn = get_connection()
+    st.write(f"🔍 DB-2: get_connection() → {'OK' if conn else 'None (ошибка!)'}")
     if not conn: return []
     try:
         cur = conn.cursor()
@@ -78,7 +80,7 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
             query += " AND (full_name ILIKE %s OR phone ILIKE %s)"
             params.append(f"%{search_query}%")
             params.append(f"%{search_query}%")
-        
+
         if start_date and mode != "archive":
             query += " AND created_at >= %s"
             params.append(start_date)
@@ -87,10 +89,8 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
             params.append(datetime.combine(end_date, datetime.max.time()))
 
         query += " ORDER BY id DESC"
-        
-        # ТОЧЕЧНОЕ ИСПРАВЛЕНИЕ ДЛЯ АРХИВА
+
         if mode == "archive":
-            # Форсируем лимит 50 и текущий отступ прямо в строку запроса
             safe_limit = int(limit)
             safe_offset = int(offset)
             query += f" LIMIT {safe_limit} OFFSET {safe_offset}"
@@ -99,10 +99,13 @@ def get_leads(search_query=None, start_date=None, end_date=None, mode="active", 
             safe_offset = int(offset)
             query += f" LIMIT {safe_limit} OFFSET {safe_offset}"
 
+        st.write(f"🔍 DB-3: cur.execute() — запрос: `{query[:100]}`")
         cur.execute(query, params)
-        colnames = [desc[0] for desc in cur.description]
+        st.write("🔍 DB-4: execute OK — fetchall()...")
         rows = cur.fetchall()
-        
+        st.write(f"🔍 DB-5: fetchall OK — {len(rows)} строк")
+
+        colnames = [desc[0] for desc in cur.description]
         leads = []
         for row in rows:
             leads.append(dict(zip(colnames, row)))

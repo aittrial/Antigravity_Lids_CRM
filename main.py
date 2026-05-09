@@ -167,8 +167,11 @@ def main():
         
         t1, t2 = st.tabs(["🔥 Активные", "📦 Архив"])
         with t1:
+            st.write("🔍 M-1: перед get_leads(active)")
             data_active = get_leads(s_query, st_d, en_d, mode="active", status_filter=c_filt, source_filter=src_filt, limit=50, offset=0)
+            st.write(f"🔍 M-2: get_leads вернул {len(data_active)} лидов")
             render_leads_list(data_active, start_order=1, can_archive=True)
+            st.write("🔍 M-3: render_leads_list завершён")
 
         with t2:
             if st.button("📂 Загрузить архив", use_container_width=True, key="btn_load_arch"):
