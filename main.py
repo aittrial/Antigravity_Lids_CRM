@@ -167,18 +167,17 @@ def main():
         c_filt, src_filt = f3.selectbox("🎨 Статус", FILTER_COLOR_MAP), f4.selectbox("📡 Источник", FILTER_SOURCE_MAP)
         st_d, en_d = (d_range[0], d_range[1]) if len(d_range) == 2 else (None, None)
         
+        data_active = get_leads(s_query, st_d, en_d, mode="active", status_filter=c_filt, source_filter=src_filt, limit=50, offset=0)
+        limit_arch = 50
+        current_page = st.session_state.archive_page_number
+        offset_arch = current_page * limit_arch
+        data_archive = get_leads(s_query, None, None, mode="archive", status_filter=c_filt, source_filter=src_filt, limit=limit_arch, offset=offset_arch)
+
         t1, t2 = st.tabs(["🔥 Активные", "📦 Архив"])
         with t1:
-            data_active = get_leads(s_query, st_d, en_d, mode="active", status_filter=c_filt, source_filter=src_filt, limit=50, offset=0)
             render_leads_list(data_active, start_order=1, can_archive=True)
 
         with t2:
-            # ИСПРАВЛЕННЫЙ БЛОК НАВИГАЦИИ АРХИВА
-            limit_arch = 50
-            current_page = st.session_state.archive_page_number
-            offset_arch = current_page * limit_arch
-            # ПРАВКА: Передаем None, чтобы даты не фильтровали архив
-            data_archive = get_leads(s_query, None, None, mode="archive", status_filter=c_filt, source_filter=src_filt, limit=limit_arch, offset=offset_arch)
             
             render_leads_list(data_archive, start_order=offset_arch + 1)
             
