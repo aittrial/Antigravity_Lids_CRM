@@ -185,29 +185,25 @@ def main():
                     st.info("Конец списка")
 
         with t2:
-            if st.button("📂 Загрузить архив", use_container_width=True, key="btn_load_arch"):
-                st.session_state['archive_loaded'] = True
+            limit_arch = 20
+            current_page = st.session_state.archive_page_number
+            offset_arch = current_page * limit_arch
+            data_archive = get_leads(s_query, None, None, mode="archive", status_filter=c_filt, source_filter=src_filt, limit=limit_arch, offset=offset_arch)
+            render_leads_list(data_archive, start_order=offset_arch + 1)
 
-            if st.session_state.get('archive_loaded', False):
-                limit_arch = 20
-                current_page = st.session_state.archive_page_number
-                offset_arch = current_page * limit_arch
-                data_archive = get_leads(s_query, None, None, mode="archive", status_filter=c_filt, source_filter=src_filt, limit=limit_arch, offset=offset_arch)
-                render_leads_list(data_archive, start_order=offset_arch + 1)
-
-                st.write("---")
-                nav1, nav2, nav3 = st.columns([1, 2, 1])
-                with nav1:
-                    if st.button("⬅️ Назад", key="btn_arc_p") and current_page > 0:
-                        st.session_state.archive_page_number -= 1; st.rerun()
-                with nav2:
-                    st.markdown(f"<center>Страница {current_page + 1}</center>", unsafe_allow_html=True)
-                with nav3:
-                    if len(data_archive) == limit_arch:
-                        if st.button("Вперед ➡️", key="btn_arc_n"):
-                            st.session_state.archive_page_number += 1; st.rerun()
-                    else:
-                        st.info("Конец списка")
+            st.write("---")
+            nav1, nav2, nav3 = st.columns([1, 2, 1])
+            with nav1:
+                if st.button("⬅️ Назад", key="btn_arc_p") and current_page > 0:
+                    st.session_state.archive_page_number -= 1; st.rerun()
+            with nav2:
+                st.markdown(f"<center>Страница {current_page + 1}</center>", unsafe_allow_html=True)
+            with nav3:
+                if len(data_archive) == limit_arch:
+                    if st.button("Вперед ➡️", key="btn_arc_n"):
+                        st.session_state.archive_page_number += 1; st.rerun()
+                else:
+                    st.info("Конец списка")
 
     elif choice == "➕ Новый лид":
         st.header("➕ Новый лид")
