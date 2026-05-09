@@ -14,8 +14,7 @@ def get_connection():
             database=os.getenv("DB_NAME"),
             user=os.getenv("DB_USER"),
             password=os.getenv("DB_PASSWORD"),
-            sslmode='require',
-            connect_timeout=10
+            sslmode='require'
         )
         return conn
     except Exception as e:
