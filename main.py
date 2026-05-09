@@ -55,15 +55,17 @@ def render_leads_list(leads_data, start_order=1, can_archive=False):
     if not leads_data:
         st.info("Лидов не найдено.")
         return
+    st.write(f"🔍 R-0: начало render, {len(leads_data)} лидов")
     for i, row in enumerate(leads_data):
+        st.write(f"🔍 R-{i+1}: лид id={row['id']}, status_color={repr(row['status_color'])}")
         color = get_status_color(row['status_color'])
         date_s = row['created_at'].strftime("%d.%m.%Y %H:%M")
-        
+
         # Динамический заголовок с временем звонка
         pref_time = f" | ⏰ {row['preferred_time']}" if row.get('preferred_time') else ""
-        
+
         st.markdown(f'<div style="background-color:{color}; border-radius:10px; padding:12px; margin-bottom:10px; border:2px solid #444; color: black !important;"><b style="color: black !important; font-size: 14px;">#{start_order+i} | 📅 {date_s}{pref_time} | {row["full_name"]} | {row["phone"]}</b></div>', unsafe_allow_html=True)
-        
+
         with st.expander("🛠 Управление"):
             c1, c2, c3 = st.columns([1, 2, 1])
             
