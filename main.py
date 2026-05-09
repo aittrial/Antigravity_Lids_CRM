@@ -165,7 +165,7 @@ def main():
         
         t1, t2 = st.tabs(["🔥 Активные", "📦 Архив"])
         with t1:
-            limit_act = 20
+            limit_act = 25
             cur_act_page = st.session_state.active_page_number
             offset_act = cur_act_page * limit_act
             data_active = get_leads(s_query, st_d, en_d, mode="active", status_filter=c_filt, source_filter=src_filt, limit=limit_act, offset=offset_act)
