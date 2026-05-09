@@ -45,9 +45,6 @@ def init_db():
                 archived_at TIMESTAMP DEFAULT NULL
             );
         """)
-        cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL;")
-        cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS whatsapp TEXT;")
-        cur.execute("ALTER TABLE allowed_emails ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'admin';")
         conn.commit()
     finally:
         conn.close()
